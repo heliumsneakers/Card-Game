@@ -1,0 +1,10 @@
+build/
+dist/
+node_modules/
+editor/public/game/
+concepts/
+game/assets/*.rres
+assets/
+docs/
+.DS_Store
+nvim.log

@@ -1,0 +1,24 @@
+{
+  "scripts": {
+    "build:web": "love.js game/ dist/web -c -t \"Pixel Card Game\"",
+    "preview:prepare": "node tools/prepare-editor-preview.mjs",
+    "dev": "npm run build:web && npm run preview:prepare && vite --config editor/vite.config.ts",
+    "build:editor": "npm run build:web && npm run preview:prepare && vite build --config editor/vite.config.ts",
+    "typecheck": "tsc -p editor/tsconfig.json --noEmit",
+    "test:editor": "vitest run --config editor/vite.config.ts"
+  },
+  "dependencies": {
+    "love.js": "^11.4.1",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.6",
+    "@types/react": "^19.1.16",
+    "@types/react-dom": "^19.1.9",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.7",
+    "vitest": "^3.2.4"
+  }
+}

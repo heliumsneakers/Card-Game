@@ -1,0 +1,434 @@
+{
+  "schemaVersion": 1,
+  "contentRevision": "draft-1790449295875",
+  "cards": [
+    {
+      "id": "card.firebolt",
+      "name": "Firebolt",
+      "cost": 1,
+      "type": "DMG",
+      "target": "enemy",
+      "enabled": true,
+      "availability": {
+        "startingDeck": 3,
+        "shop": false,
+        "copyLimit": 3
+      },
+      "effects": [
+        {
+          "op": "setLocal",
+          "name": "damage",
+          "value": {
+            "kind": "binary",
+            "operator": "add",
+            "left": {
+              "kind": "literal",
+              "value": 2
+            },
+            "right": {
+              "kind": "counter",
+              "id": "card.firebolt"
+            }
+          }
+        },
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "local",
+            "name": "damage"
+          },
+          "scalable": true
+        },
+        {
+          "op": "incrementCounter",
+          "id": "$thisCard",
+          "amount": 1
+        }
+      ],
+      "element": "fire",
+      "description": "Deal {dmg=2} damage to target. +1 for each Firebolt cast this turn."
+    },
+    {
+      "id": "card.frostbite",
+      "name": "Frostbite",
+      "cost": 1,
+      "type": "DMG",
+      "target": "enemy",
+      "enabled": true,
+      "availability": {
+        "startingDeck": 3,
+        "shop": false,
+        "copyLimit": 3
+      },
+      "effects": [
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "literal",
+            "value": 2
+          },
+          "scalable": true
+        },
+        {
+          "op": "freeze",
+          "target": "selectedEnemy"
+        }
+      ],
+      "element": "ice",
+      "description": "Deal {dmg=2} damage to target. Freeze."
+    },
+    {
+      "id": "card.ice_storm",
+      "name": "Ice Storm",
+      "cost": 3,
+      "type": "DMG",
+      "target": "all",
+      "enabled": true,
+      "availability": {
+        "startingDeck": 0,
+        "shop": true,
+        "copyLimit": 3
+      },
+      "effects": [
+        {
+          "op": "damage",
+          "target": "allEnemies",
+          "amount": {
+            "kind": "literal",
+            "value": 3
+          },
+          "scalable": true
+        },
+        {
+          "op": "freeze",
+          "target": "allEnemies"
+        }
+      ],
+      "element": "ice",
+      "description": "Deal {dmg=3} damage to all enemies. Freeze."
+    },
+    {
+      "id": "card.fireball",
+      "name": "Fireball",
+      "cost": 2,
+      "type": "DMG",
+      "target": "enemy",
+      "enabled": true,
+      "availability": {
+        "startingDeck": 0,
+        "shop": true,
+        "copyLimit": 3
+      },
+      "effects": [
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "literal",
+            "value": 6
+          },
+          "scalable": true
+        }
+      ],
+      "element": "fire",
+      "description": "Deal {dmg=6} damage to target."
+    },
+    {
+      "id": "card.arcane_ward",
+      "name": "Arcane Ward",
+      "cost": 1,
+      "type": "DEF",
+      "target": "self",
+      "enabled": true,
+      "availability": {
+        "startingDeck": 3,
+        "shop": false,
+        "copyLimit": 3
+      },
+      "effects": [
+        {
+          "op": "armor",
+          "amount": {
+            "kind": "literal",
+            "value": 2
+          },
+          "scalable": true
+        }
+      ],
+      "element": "earth",
+      "description": "Gain {armor=2} Armor."
+    },
+    {
+      "id": "card.mend",
+      "name": "Mend",
+      "cost": 1,
+      "type": "HEAL",
+      "target": "self",
+      "enabled": true,
+      "availability": {
+        "startingDeck": 0,
+        "shop": true,
+        "copyLimit": 3
+      },
+      "effects": [
+        {
+          "op": "heal",
+          "amount": {
+            "kind": "literal",
+            "value": 5
+          },
+          "scalable": true
+        }
+      ],
+      "element": "nature",
+      "description": "Heal {heal=5} HP."
+    },
+    {
+      "id": "card.arcane_intellect",
+      "name": "Arcane Intellect",
+      "cost": 1,
+      "type": "UTIL",
+      "target": "self",
+      "enabled": true,
+      "availability": {
+        "startingDeck": 0,
+        "shop": true,
+        "copyLimit": 3
+      },
+      "effects": [
+        {
+          "op": "draw",
+          "amount": {
+            "kind": "literal",
+            "value": 2
+          },
+          "scalable": true
+        }
+      ],
+      "element": "arcane",
+      "description": "Draw {draw=2} cards."
+    },
+    {
+      "id": "card.power_surge",
+      "name": "Power Surge",
+      "cost": 1,
+      "type": "UTIL",
+      "target": "self",
+      "enabled": true,
+      "retainsStatuses": [
+        "status.spell_power"
+      ],
+      "availability": {
+        "startingDeck": 0,
+        "shop": true,
+        "copyLimit": 3
+      },
+      "effects": [
+        {
+          "op": "addStatus",
+          "id": "status.spell_power",
+          "stacks": {
+            "kind": "literal",
+            "value": 1
+          },
+          "scalable": false
+        }
+      ],
+      "element": "arcane",
+      "description": "Next spell power x2"
+    },
+    {
+      "id": "card.mana_surge",
+      "name": "Mana Surge",
+      "cost": 0,
+      "type": "UTIL",
+      "target": "self",
+      "enabled": true,
+      "availability": {
+        "startingDeck": 0,
+        "shop": true,
+        "copyLimit": 3
+      },
+      "effects": [
+        {
+          "op": "mana",
+          "amount": {
+            "kind": "literal",
+            "value": 2
+          },
+          "cap": 3,
+          "scalable": true
+        }
+      ],
+      "element": "arcane",
+      "description": "Gain {mana=2} mana this turn."
+    },
+    {
+      "id": "card.mirror_image",
+      "name": "Mirror Image",
+      "cost": 1,
+      "type": "UTIL",
+      "target": "self",
+      "enabled": true,
+      "availability": {
+        "startingDeck": 0,
+        "shop": true,
+        "copyLimit": 3
+      },
+      "effects": [
+        {
+          "op": "addStatus",
+          "id": "status.mirror",
+          "stacks": {
+            "kind": "literal",
+            "value": 1
+          },
+          "scalable": true
+        }
+      ],
+      "element": "arcane",
+      "description": "Add a copy of your next spell to your hand. Its copy costs 1 less."
+    }
+  ],
+  "enemies": [
+    {
+      "id": "enemy.goblin",
+      "name": "Goblin",
+      "damage": {
+        "min": 2,
+        "max": 3
+      },
+      "hp": {
+        "min": 8,
+        "max": 9
+      },
+      "enabled": true,
+      "generation": {
+        "spawnEnabled": true,
+        "spawnWeight": 1,
+        "minimumRoom": 1,
+        "maximumCopies": 4,
+        "bossOnly": false,
+        "tags": []
+      }
+    },
+    {
+      "id": "enemy.skeleton",
+      "name": "Skeleton",
+      "damage": {
+        "min": 3,
+        "max": 5
+      },
+      "hp": {
+        "min": 8,
+        "max": 14
+      },
+      "enabled": true,
+      "generation": {
+        "spawnEnabled": true,
+        "spawnWeight": 1,
+        "minimumRoom": 2,
+        "maximumCopies": 4,
+        "bossOnly": false,
+        "tags": []
+      }
+    },
+    {
+      "id": "enemy.bone_lord",
+      "name": "Bone Lord",
+      "damage": {
+        "min": 6,
+        "max": 6
+      },
+      "hp": {
+        "min": 28,
+        "max": 28
+      },
+      "enabled": true,
+      "generation": {
+        "spawnEnabled": false,
+        "spawnWeight": 1,
+        "minimumRoom": 1,
+        "maximumCopies": 4,
+        "bossOnly": true,
+        "tags": [
+          "boss",
+          "undead"
+        ]
+      }
+    },
+    {
+      "id": "enemy.blob",
+      "name": "Blob",
+      "damage": {
+        "min": 2,
+        "max": 3
+      },
+      "hp": {
+        "min": 2,
+        "max": 4
+      },
+      "enabled": true,
+      "generation": {
+        "spawnEnabled": true,
+        "spawnWeight": 1,
+        "minimumRoom": 1,
+        "maximumCopies": 4,
+        "bossOnly": false,
+        "tags": []
+      }
+    }
+  ],
+  "roomCurve": [
+    {
+      "room": 1,
+      "power": 1,
+      "minimumEnemies": 1,
+      "maximumEnemies": 2,
+      "minimumBudgetRatio": 0.9,
+      "maximumBudgetRatio": 1.2,
+      "requiredTags": [],
+      "excludedTags": []
+    },
+    {
+      "room": 2,
+      "power": 3,
+      "minimumEnemies": 1,
+      "maximumEnemies": 3,
+      "minimumBudgetRatio": 0.9,
+      "maximumBudgetRatio": 1.05,
+      "requiredTags": [],
+      "excludedTags": []
+    },
+    {
+      "room": 3,
+      "power": 5,
+      "minimumEnemies": 1,
+      "maximumEnemies": 4,
+      "minimumBudgetRatio": 0.9,
+      "maximumBudgetRatio": 1.2,
+      "requiredTags": [],
+      "excludedTags": []
+    },
+    {
+      "room": 4,
+      "power": 7,
+      "minimumEnemies": 1,
+      "maximumEnemies": 4,
+      "minimumBudgetRatio": 0.9,
+      "maximumBudgetRatio": 1.1,
+      "requiredTags": [],
+      "excludedTags": []
+    }
+  ],
+  "endless": {
+    "startingPower": 7,
+    "powerPerRoom": 1,
+    "minimumEnemies": 1,
+    "maximumEnemies": 4,
+    "minimumBudgetRatio": 0.9,
+    "maximumBudgetRatio": 1.2
+  }
+}
