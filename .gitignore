@@ -6,5 +6,6 @@ concepts/
 game/assets/*.rres
 assets/
 docs/
+.luarc.json
 .DS_Store
 nvim.log
