@@ -27,6 +27,8 @@ export default function App() {
   const [selection, setSelection] = useState<Selection>(() => initialSelection(content));
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("Draft loaded");
+  const [previewRunning, setPreviewRunning] = useState(false);
+  const [previewInstance, setPreviewInstance] = useState(0);
   const importRef = useRef<HTMLInputElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const issues = useMemo(() => validateContent(content), [content]);
@@ -110,12 +112,18 @@ export default function App() {
     try { const next = migrateDescriptions(JSON.parse(await file.text()) as ContentDocument); const nextIssues = validateContent(next); if (nextIssues.length) throw new Error(nextIssues[0].message); setContent(next); setSelection(initialSelection(next)); setStatus(`Imported ${file.name}`); }
     catch (error) { setStatus(`Import failed: ${error instanceof Error ? error.message : String(error)}`); }
   };
-  const applyPreview = () => {
+  const loadPreview = (nextStatus: string) => {
     if (issues.length) { setStatus("Fix validation issues before previewing"); return; }
     const previewContent = { ...content, preview: { featuredCardId: selectedCard?.id } };
     localStorage.setItem("cardgame.preview.content", deterministicJson(previewContent));
-    setStatus("Reloading preview…");
-    if (iframeRef.current) iframeRef.current.src = `${gameUrl}?revision=${encodeURIComponent(content.contentRevision)}`;
+    setStatus(nextStatus);
+    setPreviewRunning(true);
+    setPreviewInstance((current) => current + 1);
+  };
+  const applyPreview = () => loadPreview(previewRunning ? "Reloading preview…" : "Starting preview…");
+  const stopPreview = () => {
+    setPreviewRunning(false);
+    setStatus("Preview stopped");
   };
 
   const filteredCards = content.cards.filter((card) => card.name.toLowerCase().includes(query.toLowerCase()));
@@ -175,6 +183,6 @@ export default function App() {
         </div></section>
       </>}
     </main>
-    <aside className="preview"><div className="preview-heading"><div><span>Live preview</span><b>{status}</b></div><span className="live-dot" /></div>{selectedCard && <div className={`card-preview element-${selectedCard.element}`}><div className="mana-orb">{selectedCard.cost}</div><small>{selectedCard.type} · {selectedCard.element}</small><h2>{selectedCard.name}</h2><div className="art-placeholder"><span>✦</span></div><p>{describeCard(selectedCard) || "Add an effect to generate rules text."}</p></div>}<div className="game-frame"><div className="game-frame-title"><span>Running game</span><small>love.js</small></div><iframe ref={iframeRef} title="Pixel Card Game preview" src={gameUrl} /></div>{issues.length > 0 && <div className="issues"><h3>Needs attention</h3>{issues.slice(0, 6).map((issue) => <p key={`${issue.path}-${issue.message}`}><b>{issue.path}</b>{issue.message}</p>)}</div>}</aside>
+    <aside className="preview"><div className="preview-heading"><div><span>Live preview</span><b>{status}</b></div><span className={`live-dot ${previewRunning ? "" : "stopped"}`} /></div>{selectedCard && <div className={`card-preview element-${selectedCard.element}`}><div className="mana-orb">{selectedCard.cost}</div><small>{selectedCard.type} · {selectedCard.element}</small><h2>{selectedCard.name}</h2><div className="art-placeholder"><span>✦</span></div><p>{describeCard(selectedCard) || "Add an effect to generate rules text."}</p></div>}<div className="game-frame"><div className="game-frame-title"><span>{previewRunning ? "Running game" : "Game preview stopped"}</span><div className="game-frame-actions"><button type="button" disabled={previewRunning} onClick={() => loadPreview("Starting preview…")}>Start</button><button type="button" disabled={!previewRunning} onClick={stopPreview}>Stop</button></div></div>{previewRunning ? <iframe key={previewInstance} ref={iframeRef} title="Pixel Card Game preview" src={`${gameUrl}?revision=${encodeURIComponent(content.contentRevision)}&instance=${previewInstance}`} /> : <div className="game-frame-idle"><b>Preview is off</b><span>Start it when you are ready to test the current draft.</span></div>}</div>{issues.length > 0 && <div className="issues"><h3>Needs attention</h3>{issues.slice(0, 6).map((issue) => <p key={`${issue.path}-${issue.message}`}><b>{issue.path}</b>{issue.message}</p>)}</div>}</aside>
   </div>;
 }
