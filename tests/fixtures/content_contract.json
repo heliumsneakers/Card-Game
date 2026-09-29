@@ -1,0 +1,17 @@
+{
+  "descriptions": [
+    { "description": "Deal {dmg=2} damage.", "effects": [{ "op": "damage", "target": "selectedEnemy", "amount": { "kind": "literal", "value": 2 } }], "expected": "Deal 2 damage." },
+    { "description": "Gain {armor=2+1*2} Armor.", "effects": [{ "op": "armor", "amount": { "kind": "literal", "value": 4 } }], "expected": "Gain 4* Armor." },
+    { "description": "Heal {heal=0} HP.", "effects": [{ "op": "heal", "amount": { "kind": "literal", "value": 0 } }], "expected": "Heal 0 HP." }
+  ],
+  "enemies": [
+    { "damage": { "min": 2, "max": 3 }, "hp": { "min": 8, "max": 9 }, "generation": {}, "expectedPower": 1 },
+    { "damage": { "min": 2, "max": 3 }, "hp": { "min": 17, "max": 17 }, "generation": {}, "expectedPower": 2 },
+    { "damage": { "min": 0, "max": 0 }, "hp": { "min": 1, "max": 1 }, "generation": { "powerOverride": 7 }, "expectedPower": 7 }
+  ],
+  "invalidEdits": [
+    { "collection": "cards", "field": "cost", "value": -1 },
+    { "collection": "cards", "field": "name", "value": "" },
+    { "collection": "enemies", "field": "name", "value": "" }
+  ]
+}
