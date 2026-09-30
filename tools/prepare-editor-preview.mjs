@@ -3,9 +3,13 @@ import { resolve } from "node:path";
 
 const source = resolve("dist/web");
 const destination = resolve("editor/public/game");
+const tileSource = resolve("assets/isometric tileset/separated images");
+const tileDestination = resolve("editor/public/tiles/isometric");
 
 await mkdir(destination, { recursive: true });
 await cp(source, destination, { recursive: true, force: true });
+await mkdir(tileDestination, { recursive: true });
+await cp(tileSource, tileDestination, { recursive: true, force: true });
 
 const indexPath = resolve(destination, "index.html");
 let html = await readFile(indexPath, "utf8");

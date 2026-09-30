@@ -36,6 +36,13 @@ npm run test:editor   # editor model tests
 npm run build:editor  # production editor bundle in dist/editor
 ```
 
+The editor also includes two world-design tools:
+
+- **Tile catalog** labels all 115 isometric sprites and exposes their WFC layer, biome, weight, walkability, tags, and directional sockets.
+- **Room builder** selects seeded dimensions inside a template's width/height bounds, runs a Simple Tiled WFC collapse, places biome objects and enemy-spawn markers in later passes, supports pinned cells, and exports the catalog, template, and result as JSON.
+
+The solver in `editor/src/wfc.ts` follows the observation and adjacency-propagation structure of Maxim Gumin's MIT-licensed [WaveFunctionCollapse](https://github.com/mxgmn/WaveFunctionCollapse) project. Tile metadata is the source of adjacency truth: matching directional socket strings are compatible, and `*` acts as a wildcard.
+
 ## Packer
 
 ```text

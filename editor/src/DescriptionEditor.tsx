@@ -14,6 +14,7 @@ const tokenNames: Partial<Record<Effect["op"], string>> = {
   draw: "draw",
   mana: "mana",
   addStatus: "stacks",
+  debuff: "freeze",
 };
 
 const tokenLabels: Record<string, string> = {
@@ -23,6 +24,7 @@ const tokenLabels: Record<string, string> = {
   draw: "Cards drawn",
   mana: "Mana",
   stacks: "Status stacks",
+  freeze: "Freeze stacks",
 };
 
 function flattenEffects(effects: Effect[]): Effect[] {
@@ -55,6 +57,7 @@ function staticValue(expression: Expression, effects: Effect[], seen = new Set<s
 function effectExpression(effect: Effect): Expression | undefined {
   if (effect.op === "damage" || effect.op === "armor" || effect.op === "heal" || effect.op === "draw" || effect.op === "mana") return effect.amount;
   if (effect.op === "addStatus") return effect.stacks;
+  if (effect.op === "debuff") return effect.stacks;
   return undefined;
 }
 

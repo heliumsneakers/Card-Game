@@ -57,6 +57,10 @@ local function eachTarget(effect, context, callback)
     elseif effect.target == "selectedEnemy" then
         local enemy = context.game.enemies[context.targetIndex or 0]
         if enemy and enemy.alive then callback(enemy) end
+    elseif effect.target == "otherEnemies" then
+        for index, enemy in ipairs(context.game.enemies) do
+            if index ~= context.targetIndex and enemy.alive then callback(enemy) end
+        end
     end
 end
 
@@ -67,8 +71,19 @@ handlers.damage = function(effect, context)
     eachTarget(effect, context, function(enemy) context.game:damageEnemy(enemy, value) end)
 end
 
+local function addDebuff(enemy, id, stacks)
+    enemy.debuffs = enemy.debuffs or {}
+    enemy.debuffs[id] = (enemy.debuffs[id] or 0) + stacks
+    if id == "debuff.freeze" then enemy.frozen = enemy.debuffs[id] > 0 end
+end
+
+handlers.debuff = function(effect, context)
+    local stacks = amount(effect, context, "stacks")
+    eachTarget(effect, context, function(enemy) addDebuff(enemy, effect.id, stacks) end)
+end
+
 handlers.freeze = function(effect, context)
-    eachTarget(effect, context, function(enemy) enemy.frozen = true end)
+    eachTarget(effect, context, function(enemy) addDebuff(enemy, "debuff.freeze", 1) end)
 end
 
 handlers.armor = function(effect, context)
@@ -146,7 +161,12 @@ local function describeGenerated(definition, game, card)
         elseif effect.op == "damage" then
             local value = describeExpression(effect.amount, context)
             if effect.scalable and context then value = tostring(tonumber(value) * context.multiplier) end
-            phrases[#phrases + 1] = effect.target == "allEnemies" and ("Deal " .. value .. " damage to all enemies.") or ("Deal " .. value .. " damage.")
+            local target = effect.target == "allEnemies" and " to all enemies" or effect.target == "otherEnemies" and " to all other enemies" or " to the target"
+            phrases[#phrases + 1] = "Deal " .. value .. " damage" .. target .. "."
+        elseif effect.op == "debuff" then
+            local value = context and amount(effect, context, "stacks") or describeExpression(effect.stacks)
+            local target = effect.target == "allEnemies" and "all enemies" or effect.target == "otherEnemies" and "all other enemies" or "the target"
+            phrases[#phrases + 1] = "Apply " .. value .. " Freeze to " .. target .. "."
         elseif effect.op == "freeze" then phrases[#phrases + 1] = effect.target == "allEnemies" and "Freeze them." or "Freeze the target."
         elseif effect.op == "armor" then phrases[#phrases + 1] = "Gain " .. tostring(context and amount(effect, context) or describeExpression(effect.amount)) .. " Armor."
         elseif effect.op == "heal" then phrases[#phrases + 1] = "Heal " .. tostring(context and amount(effect, context) or describeExpression(effect.amount)) .. " HP."
@@ -197,13 +217,14 @@ end
 
 local tokenOps = {
     dmg = "damage", armor = "armor", heal = "heal", draw = "draw",
-    mana = "mana", stacks = "addStatus",
+    mana = "mana", stacks = "addStatus", freeze = "debuff",
 }
 
 local function collectValueEffects(effects, values)
     for _, effect in ipairs(effects) do
         if tokenOps.dmg == effect.op or tokenOps.armor == effect.op or tokenOps.heal == effect.op
-            or tokenOps.draw == effect.op or tokenOps.mana == effect.op or tokenOps.stacks == effect.op then
+            or tokenOps.draw == effect.op or tokenOps.mana == effect.op or tokenOps.stacks == effect.op
+            or tokenOps.freeze == effect.op then
             values[effect.op] = values[effect.op] or {}
             values[effect.op][#values[effect.op] + 1] = effect
         elseif effect.op == "if" then
@@ -241,7 +262,8 @@ local function renderDescription(definition, game, card)
         local effect = op and values[op] and values[op][explicitIndex or occurrences[baseName]]
         local resolved = baseline
         if effect and context then
-            local ok, value = pcall(amount, effect, context, effect.op == "addStatus" and "stacks" or "amount")
+            local usesStacks = effect.op == "addStatus" or effect.op == "debuff"
+            local ok, value = pcall(amount, effect, context, usesStacks and "stacks" or "amount")
             if ok then resolved = value end
         end
         local modified = usesFormula or resolved ~= baseline

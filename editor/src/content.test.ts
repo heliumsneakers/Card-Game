@@ -31,16 +31,37 @@ describe("content model", () => {
     const older = JSON.parse(JSON.stringify(initial)) as ContentDocument;
     delete (older.cards.find((card) => card.id === "card.arcane_ward") as unknown as { element?: string }).element;
     delete (older.cards.find((card) => card.id === "card.arcane_intellect") as unknown as { element?: string }).element;
+    delete (older.cards.find((card) => card.id === "card.fireball")!.availability as unknown as { shopChance?: number }).shopChance;
+    older.cards.find((card) => card.id === "card.frostbite")!.effects = [{ op: "freeze", target: "selectedEnemy" }];
     const migrated = migrateDescriptions(older);
     expect(migrated.cards.find((card) => card.id === "card.arcane_ward")?.element).toBe("earth");
     expect(migrated.cards.find((card) => card.id === "card.arcane_intellect")?.element).toBe("arcane");
+    expect(migrated.cards.find((card) => card.id === "card.fireball")?.availability.shopChance).toBe(50);
+    expect(migrated.cards.find((card) => card.id === "card.frostbite")?.effects[0]).toEqual({ op: "debuff", id: "debuff.freeze", target: "selectedEnemy", stacks: { kind: "literal", value: 1 }, scalable: false });
+  });
+
+  it("supports multi-target damage and stackable debuffs", () => {
+    const card: CardDefinition = {
+      id: "card.frozen_splash", name: "Frozen Splash", cost: 1, type: "DMG", element: "ice", target: "multi", enabled: true,
+      description: "Deal {dmg=2} damage to target and {dmg2=1} to all other enemies. Apply Freeze {freeze=1}.",
+      availability: { startingDeck: 0, shop: true, shopChance: 25, copyLimit: 3 },
+      effects: [
+        { op: "damage", target: "selectedEnemy", amount: { kind: "literal", value: 2 } },
+        { op: "damage", target: "otherEnemies", amount: { kind: "literal", value: 1 } },
+        { op: "debuff", id: "debuff.freeze", target: "selectedEnemy", stacks: { kind: "literal", value: 1 }, scalable: true },
+      ],
+    };
+    expect(describeCard(card)).toBe("Deal 2 damage to target and 1 to all other enemies. Apply Freeze 1.");
+    const content = migrateDescriptions(initial as ContentDocument);
+    const issues = validateContent({ ...content, cards: [...content.cards, card] });
+    expect(issues.filter((issue) => issue.path.startsWith(`cards[${content.cards.length}]`))).toEqual([]);
   });
 
   it("generates readable text from blocks", () => {
     const card: CardDefinition = {
       id: "card.echo_bolt", name: "Echo Bolt", cost: 1, type: "DMG", element: "arcane", target: "enemy", enabled: true,
       description: "If this follows itself, deal {dmg=1} damage.",
-      availability: { startingDeck: 0, shop: true, copyLimit: 3 },
+      availability: { startingDeck: 0, shop: true, shopChance: 50, copyLimit: 3 },
       effects: [{ op: "if", condition: { kind: "compare", operator: "eq", left: { kind: "context", path: "previousCardId" }, right: { kind: "context", path: "thisCardId" } }, then: [{ op: "damage", target: "selectedEnemy", amount: { kind: "literal", value: 1 } }] }],
     };
     expect(describeCard(card)).toBe("If this follows itself, deal 1 damage.");
@@ -50,7 +71,7 @@ describe("content model", () => {
     expect(renderDescription("Deal {dmg=2} damage. Then gain {armor=2+1} Armor.")).toBe("Deal 2 damage. Then gain 3* Armor.");
     const changed: CardDefinition = {
       id: "card.changed", name: "Changed", cost: 1, type: "DMG", element: "fire", target: "enemy", enabled: true,
-      description: "Deal {dmg=2} damage.", availability: { startingDeck: 0, shop: true, copyLimit: 3 },
+      description: "Deal {dmg=2} damage.", availability: { startingDeck: 0, shop: true, shopChance: 50, copyLimit: 3 },
       effects: [{ op: "damage", target: "selectedEnemy", amount: { kind: "literal", value: 3 } }],
     };
     expect(describeCard(changed)).toBe("Deal 3* damage.");

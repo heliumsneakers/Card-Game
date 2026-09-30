@@ -50,7 +50,7 @@ Cards.shopPool = {}
 for _, definition in ipairs(catalog.document.cards) do
     local availability = definition.availability or {}
     for _ = 1, availability.startingDeck or 0 do Cards.startingDeck[#Cards.startingDeck + 1] = definition.id end
-    if availability.shop then Cards.shopPool[#Cards.shopPool + 1] = definition.id end
+    if definition.enabled ~= false and availability.shop then Cards.shopPool[#Cards.shopPool + 1] = definition.id end
 end
 
 function Cards.describe(cardOrReference, game)

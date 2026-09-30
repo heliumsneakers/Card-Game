@@ -53,5 +53,20 @@ assert(formulaDescription == "Deal 3* damage.")
 Cards.catalog.document.preview = { featuredCardId = "card.fireball" }
 game:openReward()
 assert(game.shopChoices[1] == "card.fireball", "previewed card should be pinned to the first shop slot")
+local eligibleCount = 0
+for _, id in ipairs(Cards.shopPool) do
+    local availability = Cards.definition(id).availability
+    if (availability.shopChance or 50) > 0 and game:deckCount(id) < availability.copyLimit then eligibleCount = eligibleCount + 1 end
+end
+assert(#game.shopChoices == math.min(6, eligibleCount), "shop should fill all six slots when the pool allows")
+
+local excludedId
+for _, id in ipairs(Cards.shopPool) do if id ~= "card.fireball" then excludedId = id; break end end
+local excludedDefinition = Cards.definition(excludedId)
+local originalChance = excludedDefinition.availability.shopChance
+excludedDefinition.availability.shopChance = 0
+game:openReward()
+for _, id in ipairs(game.shopChoices) do assert(id ~= excludedId, "zero-percent cards should not enter the shop") end
+excludedDefinition.availability.shopChance = originalChance
 
 print("content schema and interpreter tests passed")

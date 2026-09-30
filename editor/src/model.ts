@@ -1,7 +1,7 @@
 export type CardType = "DMG" | "DEF" | "HEAL" | "UTIL";
 export type CardElement = "fire" | "ice" | "nature" | "earth" | "arcane";
-export type CardTarget = "enemy" | "all" | "self";
-export type EffectTarget = "selectedEnemy" | "allEnemies";
+export type CardTarget = "enemy" | "multi" | "all" | "self";
+export type EffectTarget = "selectedEnemy" | "otherEnemies" | "allEnemies";
 
 export type Expression =
   | { kind: "literal"; value: number }
@@ -13,6 +13,8 @@ export type Expression =
 
 export type Effect =
   | { op: "damage"; target: EffectTarget; amount: Expression; scalable?: boolean }
+  | { op: "debuff"; id: "debuff.freeze"; target: EffectTarget; stacks: Expression; scalable?: boolean }
+  /** Legacy schema-v1 Freeze effects are migrated to a debuff block on load. */
   | { op: "freeze"; target: EffectTarget }
   | { op: "armor" | "heal" | "draw"; amount: Expression; scalable?: boolean }
   | { op: "mana"; amount: Expression; cap: number; scalable?: boolean }
@@ -31,7 +33,7 @@ export interface CardDefinition {
   enabled: boolean;
   description: string;
   retainsStatuses?: string[];
-  availability: { startingDeck: number; shop: boolean; copyLimit: number };
+  availability: { startingDeck: number; shop: boolean; shopChance: number; copyLimit: number };
   effects: Effect[];
 }
 
@@ -86,6 +88,7 @@ export const literal = (value: number): Expression => ({ kind: "literal", value 
 
 export function newEffect(op: Effect["op"]): Effect {
   if (op === "damage") return { op, target: "selectedEnemy", amount: literal(2), scalable: true };
+  if (op === "debuff") return { op, id: "debuff.freeze", target: "selectedEnemy", stacks: literal(1), scalable: false };
   if (op === "freeze") return { op, target: "selectedEnemy" };
   if (op === "mana") return { op, amount: literal(2), cap: 3, scalable: true };
   if (op === "addStatus") return { op, id: "status.spell_power", stacks: literal(1) };

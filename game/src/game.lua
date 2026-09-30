@@ -20,6 +20,18 @@ local function shuffle(list, random)
     end
 end
 
+local function takeWeighted(list, random, weight)
+    local total = 0
+    for _, value in ipairs(list) do total = total + math.max(0, weight(value)) end
+    if total <= 0 then return nil end
+    local roll = random() * total
+    for index, value in ipairs(list) do
+        roll = roll - math.max(0, weight(value))
+        if roll <= 0 then return table.remove(list, index) end
+    end
+    return table.remove(list)
+end
+
 local function makeEnemy(spec, boss, random, scale)
     local reference = spec.id or spec[1]
     local definition = spec.damage and spec or assert(Cards.catalog.enemies[reference], "unknown enemy: " .. tostring(reference))
@@ -30,7 +42,7 @@ local function makeEnemy(spec, boss, random, scale)
     toughness = math.max(1, math.floor(toughness * scale + 0.5))
     return {
         id = definition.id, name = definition.name, pow = power, tough = toughness, maxTough = toughness,
-        frozen = false, alive = true, isBoss = boss or false, flash = 0,
+        frozen = false, debuffs = {}, alive = true, isBoss = boss or false, flash = 0,
     }
 end
 
@@ -159,7 +171,7 @@ function Game:canPlay(index, targetIndex)
     local card = self.hand[index]
     if not card or card.cost > self.mana then return false end
     local definition = Cards.definition(card)
-    if definition.target == "enemy" then
+    if definition.target == "enemy" or definition.target == "multi" then
         local enemy = self.enemies[targetIndex or 0]
         return enemy ~= nil and enemy.alive
     end
@@ -293,9 +305,14 @@ function Game:update(dt)
         return
     end
 
-    if enemy.frozen then
-        enemy.frozen = false
-        self:notice(enemy.name .. " IS FROZEN", 0.65)
+    local freezeStacks = enemy.debuffs and (enemy.debuffs["debuff.freeze"] or 0) or (enemy.frozen and 1 or 0)
+    if freezeStacks > 0 then
+        local remaining = freezeStacks - 1
+        enemy.debuffs = enemy.debuffs or {}
+        enemy.debuffs["debuff.freeze"] = remaining
+        enemy.frozen = remaining > 0
+        local suffix = remaining > 0 and ("  •  " .. remaining .. " LEFT") or ""
+        self:notice(enemy.name .. " IS FROZEN" .. suffix, 0.65)
     else
         self:damagePlayer(enemy.pow)
         self:notice(enemy.name .. " HITS FOR " .. enemy.pow, 0.65)
@@ -319,9 +336,10 @@ function Game:openReward()
     self.showDeck = false
     local eligible = {}
     for _, name in ipairs(Cards.shopPool) do
-        if self:deckCount(name) < 3 then eligible[#eligible + 1] = name end
+        local availability = Cards.definition(name).availability or {}
+        local chance = availability.shopChance == nil and 50 or availability.shopChance
+        if chance > 0 and self:deckCount(name) < (availability.copyLimit or 3) then eligible[#eligible + 1] = name end
     end
-    shuffle(eligible, self.random)
     local preview = Cards.catalog.document.preview
     local featured = preview and preview.featuredCardId or nil
     if featured then
@@ -333,8 +351,12 @@ function Game:openReward()
             end
         end
     end
-    for i = 1, math.min(6 - #self.shopChoices, #eligible) do
-        self.shopChoices[#self.shopChoices + 1] = eligible[i]
+    while #self.shopChoices < 6 and #eligible > 0 do
+        local picked = takeWeighted(eligible, self.random, function(id)
+            return (Cards.definition(id).availability or {}).shopChance or 50
+        end)
+        if not picked then break end
+        self.shopChoices[#self.shopChoices + 1] = picked
     end
 end
 
@@ -342,8 +364,9 @@ function Game:pickReward(name)
     if self.state ~= "reward" or #self.shopPicks >= 3 then return false end
     local pending = 0
     for _, picked in ipairs(self.shopPicks) do if picked == name then pending = pending + 1 end end
-    if self:deckCount(name) + pending >= 3 then
-        self:notice("MAX 3 COPIES", 0.8)
+    local copyLimit = (Cards.definition(name).availability or {}).copyLimit or 3
+    if self:deckCount(name) + pending >= copyLimit then
+        self:notice("MAX " .. copyLimit .. " COPIES", 0.8)
         return false
     end
     self.shopPicks[#self.shopPicks + 1] = Cards.definition(name).id

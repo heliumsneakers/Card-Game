@@ -17,11 +17,13 @@ local function integer(value, minimum)
     return type(value) == "number" and value == math.floor(value) and value >= (minimum or 0)
 end
 
-local validTargets = { enemy = true, all = true, self = true }
+local validTargets = { enemy = true, multi = true, all = true, self = true }
+local validEffectTargets = { selectedEnemy = true, otherEnemies = true, allEnemies = true }
+local validDebuffs = { ["debuff.freeze"] = true }
 local validTypes = { DMG = true, DEF = true, HEAL = true, UTIL = true }
 local validElements = { fire = true, ice = true, nature = true, earth = true, arcane = true }
 local validOps = {
-    damage = true, freeze = true, armor = true, heal = true, draw = true,
+    damage = true, debuff = true, freeze = true, armor = true, heal = true, draw = true,
     mana = true, addStatus = true, incrementCounter = true, setLocal = true, ["if"] = true,
 }
 
@@ -99,7 +101,14 @@ local function validateExpression(expression, path, errors, depth)
     end
 end
 
-local function validateEffects(effects, path, errors, depth)
+local function validateEffectTarget(effect, path, errors, cardTarget)
+    if not validEffectTargets[effect.target] then add(errors, path .. ".target", "unsupported enemy target"); return end
+    if effect.target == "selectedEnemy" and cardTarget ~= "enemy" and cardTarget ~= "multi" then add(errors, path .. ".target", "selected enemy requires enemy or multi card target") end
+    if effect.target == "otherEnemies" and cardTarget ~= "multi" then add(errors, path .. ".target", "other enemies requires multi card target") end
+    if effect.target == "allEnemies" and cardTarget ~= "all" and cardTarget ~= "multi" then add(errors, path .. ".target", "all enemies requires all or multi card target") end
+end
+
+local function validateEffects(effects, path, errors, depth, cardTarget)
     depth = depth or 0
     if type(effects) ~= "table" then add(errors, path, "must be an array"); return end
     if #effects > 64 then add(errors, path, "cannot contain more than 64 effects") end
@@ -108,7 +117,16 @@ local function validateEffects(effects, path, errors, depth)
         local effectPath = string.format("%s[%d]", path, index)
         if type(effect) ~= "table" or not validOps[effect.op] then
             add(errors, effectPath .. ".op", "unsupported effect operation")
-        elseif effect.op == "damage" or effect.op == "armor" or effect.op == "heal" or effect.op == "draw" or effect.op == "mana" then
+        elseif effect.op == "damage" then
+            validateExpression(effect.amount, effectPath .. ".amount", errors)
+            validateEffectTarget(effect, effectPath, errors, cardTarget)
+        elseif effect.op == "debuff" then
+            if not validDebuffs[effect.id] then add(errors, effectPath .. ".id", "unsupported debuff") end
+            validateExpression(effect.stacks, effectPath .. ".stacks", errors)
+            validateEffectTarget(effect, effectPath, errors, cardTarget)
+        elseif effect.op == "freeze" then
+            validateEffectTarget(effect, effectPath, errors, cardTarget)
+        elseif effect.op == "armor" or effect.op == "heal" or effect.op == "draw" or effect.op == "mana" then
             validateExpression(effect.amount, effectPath .. ".amount", errors)
         elseif effect.op == "addStatus" then
             if type(effect.id) ~= "string" then add(errors, effectPath .. ".id", "status id is required") end
@@ -120,8 +138,8 @@ local function validateEffects(effects, path, errors, depth)
             validateExpression(effect.value, effectPath .. ".value", errors)
         elseif effect.op == "if" then
             validateExpression(effect.condition, effectPath .. ".condition", errors)
-            validateEffects(effect["then"] or {}, effectPath .. ".then", errors, depth + 1)
-            validateEffects(effect["else"] or {}, effectPath .. ".else", errors, depth + 1)
+            validateEffects(effect["then"] or {}, effectPath .. ".then", errors, depth + 1, cardTarget)
+            validateEffects(effect["else"] or {}, effectPath .. ".else", errors, depth + 1, cardTarget)
         end
     end
 end
@@ -146,7 +164,13 @@ function Content.validate(document)
         -- Description was added within schema v1. Older v1 documents remain
         -- loadable and fall back to generated text until the editor migrates them.
         if card.description ~= nil then validateDescription(card.description, path .. ".description", errors) end
-        validateEffects(card.effects, path .. ".effects", errors)
+        local availability = card.availability
+        if type(availability) ~= "table" then add(errors, path .. ".availability", "availability is required")
+        else
+            if availability.shopChance ~= nil and not numberInRange(availability.shopChance, 0, 100) then add(errors, path .. ".availability.shopChance", "must be from 0-100") end
+            if not integer(availability.copyLimit, 1) then add(errors, path .. ".availability.copyLimit", "must be a positive integer") end
+        end
+        validateEffects(card.effects, path .. ".effects", errors, nil, card.target)
     end
     for index, enemy in ipairs(document.enemies or {}) do
         local path = string.format("enemies[%d]", index)

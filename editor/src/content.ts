@@ -1,4 +1,4 @@
-import type { CardDefinition, ContentDocument, Effect, EndlessDefinition, EnemyDefinition, Expression, RoomDefinition } from "./model";
+import { literal, type CardDefinition, type ContentDocument, type Effect, type EndlessDefinition, type EnemyDefinition, type Expression, type RoomDefinition } from "./model";
 
 export interface Issue { path: string; message: string }
 
@@ -110,7 +110,9 @@ function expressionText(expression: Expression): string {
 }
 
 function effectText(effect: Effect): string {
-  if (effect.op === "damage") return `Deal ${expressionText(effect.amount)} damage${effect.target === "allEnemies" ? " to all enemies" : ""}.`;
+  const targetText = (target: "selectedEnemy" | "otherEnemies" | "allEnemies") => target === "allEnemies" ? " to all enemies" : target === "otherEnemies" ? " to all other enemies" : " to the target";
+  if (effect.op === "damage") return `Deal ${expressionText(effect.amount)} damage${targetText(effect.target)}.`;
+  if (effect.op === "debuff") return `Apply ${expressionText(effect.stacks)} Freeze${targetText(effect.target)}.`;
   if (effect.op === "freeze") return effect.target === "allEnemies" ? "Freeze them." : "Freeze the target.";
   if (effect.op === "armor") return `Gain ${expressionText(effect.amount)} Armor.`;
   if (effect.op === "heal") return `Heal ${expressionText(effect.amount)} HP.`;
@@ -163,7 +165,7 @@ function staticEffectValue(expression: Expression, effects: Effect[], seen = new
   return Math.max(left, right);
 }
 
-const tokenEffectOps: Record<string, Effect["op"]> = { dmg: "damage", armor: "armor", heal: "heal", draw: "draw", mana: "mana", stacks: "addStatus" };
+const tokenEffectOps: Record<string, Effect["op"]> = { dmg: "damage", armor: "armor", heal: "heal", draw: "draw", mana: "mana", stacks: "addStatus", freeze: "debuff" };
 
 export function renderDescription(template: string, effects: Effect[] = []): string {
   const allEffects = flattenedEffects(effects);
@@ -176,7 +178,7 @@ export function renderDescription(template: string, effects: Effect[] = []): str
     const matching = allEffects.filter((effect) => effect.op === tokenEffectOps[baseName]);
     const effect = matching[(Number(name.match(/\d+$/)?.[0]) || occurrences[baseName]) - 1];
     let resolved: number | undefined;
-    if (effect?.op === "addStatus") resolved = staticEffectValue(effect.stacks, effects);
+    if (effect?.op === "addStatus" || effect?.op === "debuff") resolved = staticEffectValue(effect.stacks, effects);
     else if (effect && (effect.op === "damage" || effect.op === "armor" || effect.op === "heal" || effect.op === "draw" || effect.op === "mana")) resolved = staticEffectValue(effect.amount, effects);
     const displayed = resolved ?? value;
     const modified = /[+*-]/.test(formula.trim().slice(1)) || (resolved !== undefined && resolved !== value);
@@ -197,7 +199,9 @@ function migratedDescription(card: CardDefinition): string {
     return `{${numberedName}=${staticEffectValue(expression, card.effects) ?? 0}}`;
   };
   return card.effects.map((effect) => {
-    if (effect.op === "damage") return `Deal ${token("dmg", effect.amount)} damage${effect.target === "allEnemies" ? " to all enemies" : " to target"}.`;
+    const target = "target" in effect && effect.target === "allEnemies" ? "all enemies" : "target" in effect && effect.target === "otherEnemies" ? "all other enemies" : "target";
+    if (effect.op === "damage") return `Deal ${token("dmg", effect.amount)} damage to ${target}.`;
+    if (effect.op === "debuff") return `Apply {freeze=${staticEffectValue(effect.stacks, card.effects) ?? 1}} Freeze to ${target}.`;
     if (effect.op === "freeze") return effect.target === "allEnemies" ? "Freeze them." : "Freeze the target.";
     if (effect.op === "armor") return `Gain ${token("armor", effect.amount)} Armor.`;
     if (effect.op === "heal") return `Heal ${token("heal", effect.amount)} HP.`;
@@ -209,14 +213,26 @@ function migratedDescription(card: CardDefinition): string {
   }).filter(Boolean).join(" ");
 }
 
+function migrateEffects(effects: Effect[]): Effect[] {
+  return effects.map((effect) => {
+    if (effect.op === "freeze") return { op: "debuff", id: "debuff.freeze", target: effect.target, stacks: literal(1), scalable: false };
+    if (effect.op === "if") return { ...effect, then: migrateEffects(effect.then), else: effect.else ? migrateEffects(effect.else) : undefined };
+    return effect;
+  });
+}
+
 export function migrateDescriptions(content: ContentDocument): ContentDocument {
   return {
     ...content,
-    cards: content.cards.map((card) => ({
-      ...card,
-      element: card.element || defaultElement(card.type),
-      description: card.description === undefined ? migratedDescription(card) : card.description,
-    })),
+    cards: content.cards.map((card) => {
+      const migrated = {
+        ...card,
+        element: card.element || defaultElement(card.type),
+        availability: { ...card.availability, shopChance: card.availability.shopChance ?? 50 },
+        effects: migrateEffects(card.effects),
+      };
+      return { ...migrated, description: card.description === undefined ? migratedDescription(migrated) : card.description };
+    }),
     enemies: content.enemies.map((enemy) => ({
       ...enemy,
       generation: {
@@ -246,7 +262,10 @@ export function validateContent(content: ContentDocument): Issue[] {
     ids.add(card.id);
     if (!card.name.trim()) add(`${path}.name`, "Card name is required.");
     if (!Number.isInteger(card.cost) || card.cost < 0) add(`${path}.cost`, "Mana cost must be a non-negative whole number.");
+    if (!["enemy", "multi", "all", "self"].includes(card.target)) add(`${path}.target`, "Choose One Enemy, Multiple Enemies, All Enemies, or Self.");
     if (!elements.has(card.element)) add(`${path}.element`, "Choose Fire, Ice, Nature, Earth, or Arcane.");
+    if (!Number.isFinite(card.availability.shopChance) || card.availability.shopChance < 0 || card.availability.shopChance > 100) add(`${path}.availability.shopChance`, "Shop chance must be from 0% to 100%.");
+    if (!Number.isInteger(card.availability.copyLimit) || card.availability.copyLimit < 1) add(`${path}.availability.copyLimit`, "Copy limit must be a positive whole number.");
     if (!card.description?.trim()) add(`${path}.description`, "Write a card description.");
     if ((card.description?.length || 0) > 500) add(`${path}.description`, "Description cannot exceed 500 characters.");
     const strippedDescription = (card.description || "").replace(descriptionToken, "");
@@ -255,14 +274,19 @@ export function validateContent(content: ContentDocument): Issue[] {
       if (evaluateDisplayFormula(match[2]) === undefined) add(`${path}.description`, `Invalid formula in {${match[1]}=…}. Use whole numbers with +, - or *.`);
     }
     if (!card.effects.length) add(`${path}.effects`, "Add at least one effect.");
-    card.effects.forEach((effect, effectIndex) => {
-      if ((effect.op === "damage" || effect.op === "freeze") && effect.target === "selectedEnemy" && card.target !== "enemy") {
-        add(`${path}.effects[${effectIndex}].target`, "Selected Enemy requires the card target One Enemy.");
+    const validateTargets = (effects: Effect[], effectsPath: string) => effects.forEach((effect, effectIndex) => {
+      const effectPath = `${effectsPath}[${effectIndex}]`;
+      if (effect.op === "if") {
+        validateTargets(effect.then, `${effectPath}.then`);
+        validateTargets(effect.else || [], `${effectPath}.else`);
+        return;
       }
-      if ((effect.op === "damage" || effect.op === "freeze") && effect.target === "allEnemies" && card.target !== "all") {
-        add(`${path}.effects[${effectIndex}].target`, "All Enemies requires the card target All Enemies.");
-      }
+      if (effect.op !== "damage" && effect.op !== "debuff" && effect.op !== "freeze") return;
+      if (effect.target === "selectedEnemy" && card.target !== "enemy" && card.target !== "multi") add(`${effectPath}.target`, "Selected Enemy requires a One Enemy or Multiple Enemies card.");
+      if (effect.target === "otherEnemies" && card.target !== "multi") add(`${effectPath}.target`, "All Other Enemies requires a Multiple Enemies card.");
+      if (effect.target === "allEnemies" && card.target !== "all" && card.target !== "multi") add(`${effectPath}.target`, "All Enemies requires an All Enemies or Multiple Enemies card.");
     });
+    validateTargets(card.effects, `${path}.effects`);
   });
   content.enemies.forEach((enemy, index) => {
     const path = `enemies[${index}]`;

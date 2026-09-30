@@ -12,6 +12,7 @@
       "availability": {
         "startingDeck": 3,
         "shop": false,
+        "shopChance": 50,
         "copyLimit": 3
       },
       "effects": [
@@ -59,6 +60,7 @@
       "availability": {
         "startingDeck": 3,
         "shop": false,
+        "shopChance": 50,
         "copyLimit": 3
       },
       "effects": [
@@ -72,12 +74,18 @@
           "scalable": true
         },
         {
-          "op": "freeze",
-          "target": "selectedEnemy"
+          "op": "debuff",
+          "id": "debuff.freeze",
+          "target": "selectedEnemy",
+          "stacks": {
+            "kind": "literal",
+            "value": 1
+          },
+          "scalable": false
         }
       ],
       "element": "ice",
-      "description": "Deal {dmg=2} damage to target. Freeze."
+      "description": "Deal {dmg=2} damage to target. Apply Freeze {freeze=1}."
     },
     {
       "id": "card.ice_storm",
@@ -89,6 +97,7 @@
       "availability": {
         "startingDeck": 0,
         "shop": true,
+        "shopChance": 50,
         "copyLimit": 3
       },
       "effects": [
@@ -102,12 +111,18 @@
           "scalable": true
         },
         {
-          "op": "freeze",
-          "target": "allEnemies"
+          "op": "debuff",
+          "id": "debuff.freeze",
+          "target": "allEnemies",
+          "stacks": {
+            "kind": "literal",
+            "value": 1
+          },
+          "scalable": false
         }
       ],
       "element": "ice",
-      "description": "Deal {dmg=3} damage to all enemies. Freeze."
+      "description": "Deal {dmg=3} damage to all enemies. Apply Freeze {freeze=1}."
     },
     {
       "id": "card.fireball",
@@ -119,6 +134,7 @@
       "availability": {
         "startingDeck": 0,
         "shop": true,
+        "shopChance": 50,
         "copyLimit": 3
       },
       "effects": [
@@ -145,6 +161,7 @@
       "availability": {
         "startingDeck": 3,
         "shop": false,
+        "shopChance": 50,
         "copyLimit": 3
       },
       "effects": [
@@ -170,6 +187,7 @@
       "availability": {
         "startingDeck": 0,
         "shop": true,
+        "shopChance": 50,
         "copyLimit": 3
       },
       "effects": [
@@ -195,6 +213,7 @@
       "availability": {
         "startingDeck": 0,
         "shop": true,
+        "shopChance": 50,
         "copyLimit": 3
       },
       "effects": [
@@ -223,6 +242,7 @@
       "availability": {
         "startingDeck": 0,
         "shop": true,
+        "shopChance": 50,
         "copyLimit": 3
       },
       "effects": [
@@ -249,6 +269,7 @@
       "availability": {
         "startingDeck": 0,
         "shop": true,
+        "shopChance": 50,
         "copyLimit": 3
       },
       "effects": [
@@ -275,6 +296,7 @@
       "availability": {
         "startingDeck": 0,
         "shop": true,
+        "shopChance": 50,
         "copyLimit": 3
       },
       "effects": [

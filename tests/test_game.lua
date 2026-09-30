@@ -10,6 +10,7 @@ math.randomseed(12345)
 
 local Cards = require("src.cards")
 local Game = require("src.game")
+local Effects = require("src.effects")
 
 local function equal(actual, expected, message)
     assert(actual == expected, string.format("%s: expected %s, got %s", message, tostring(expected), tostring(actual)))
@@ -65,6 +66,45 @@ equal(game.hp, 28, "frozen enemy skips damage")
 equal(game.enemies[1].frozen, false, "frozen enemy thaws")
 game:update(0.7)
 equal(game.phase, "player", "enemy phase completes")
+
+local effectGame = Game.new(30, 54321)
+effectGame.enemies = {
+    { name = "Target", pow = 3, tough = 20, maxTough = 20, alive = true, frozen = false, debuffs = {}, flash = 0 },
+    { name = "Other A", pow = 3, tough = 20, maxTough = 20, alive = true, frozen = false, debuffs = {}, flash = 0 },
+    { name = "Other B", pow = 3, tough = 20, maxTough = 20, alive = true, frozen = false, debuffs = {}, flash = 0 },
+}
+local effectCard = { id = "card.modular_test", name = "Modular Test", cost = 0 }
+Effects.resolve(effectGame, effectCard, {
+    effects = {
+        { op = "damage", target = "selectedEnemy", amount = { kind = "literal", value = 2 } },
+        { op = "damage", target = "otherEnemies", amount = { kind = "literal", value = 1 } },
+    },
+}, 1)
+equal(effectGame.enemies[1].tough, 18, "multi-target primary damage")
+equal(effectGame.enemies[2].tough, 19, "multi-target splash damage")
+equal(effectGame.enemies[3].tough, 19, "multi-target splash reaches every other enemy")
+
+effectGame.statuses["status.spell_power"] = 1
+Effects.resolve(effectGame, effectCard, {
+    effects = {
+        { op = "debuff", id = "debuff.freeze", target = "selectedEnemy", stacks = { kind = "literal", value = 1 }, scalable = true },
+    },
+}, 1)
+equal(effectGame.enemies[1].debuffs["debuff.freeze"], 2, "spell power scales Freeze stacks")
+assert(effectGame.enemies[1].frozen)
+
+effectGame.state, effectGame.phase, effectGame.hp = "combat", "player", 30
+effectGame.enemies = { effectGame.enemies[1] }
+for remaining = 1, 0, -1 do
+    effectGame:endTurn()
+    effectGame:update(0.4)
+    equal(effectGame.hp, 30, "Freeze stack skips enemy attack")
+    equal(effectGame.enemies[1].debuffs["debuff.freeze"], remaining, "one Freeze stack expires per enemy turn")
+    effectGame:update(0.7)
+end
+effectGame:endTurn()
+effectGame:update(0.4)
+equal(effectGame.hp, 27, "enemy attacks after all Freeze stacks expire")
 
 game.room, game.wave = 5, 1
 game.state, game.phase = "combat", "player"

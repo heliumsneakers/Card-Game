@@ -1,20 +1,30 @@
 import { ExpressionEditor } from "./ExpressionEditor";
-import { newEffect, type Effect, type Expression } from "./model";
+import { newEffect, type Effect, type EffectTarget, type Expression } from "./model";
 
 interface Props { effects: Effect[]; onChange: (effects: Effect[]) => void; nested?: boolean }
 
 const blockLabels: Record<Effect["op"], string> = {
-  damage: "Damage", freeze: "Freeze", armor: "Gain Armor", heal: "Heal", draw: "Draw Cards",
+  damage: "Damage", debuff: "Debuffs", freeze: "Legacy Freeze", armor: "Gain Armor", heal: "Heal", draw: "Draw Cards",
   mana: "Gain Mana", addStatus: "Add Status", incrementCounter: "Increment Counter", setLocal: "Set Value", if: "Conditional",
 };
 
+function TargetField({ value, onChange }: { value: EffectTarget; onChange: (target: EffectTarget) => void }) {
+  return <label><span>Target</span><select value={value} onChange={(event) => onChange(event.target.value as EffectTarget)}><option value="selectedEnemy">Selected enemy</option><option value="otherEnemies">All other enemies</option><option value="allEnemies">All enemies</option></select></label>;
+}
+
 function EffectFields({ effect, onChange }: { effect: Effect; onChange: (effect: Effect) => void }) {
   if (effect.op === "damage") return <>
-    <label><span>Target</span><select value={effect.target} onChange={(event) => onChange({ ...effect, target: event.target.value as "selectedEnemy" | "allEnemies" })}><option value="selectedEnemy">Selected enemy</option><option value="allEnemies">All enemies</option></select></label>
+    <TargetField value={effect.target} onChange={(target) => onChange({ ...effect, target })} />
     <ExpressionEditor value={effect.amount} onChange={(amount) => onChange({ ...effect, amount })} label="Damage" />
     <label className="check"><input type="checkbox" checked={effect.scalable ?? false} onChange={(event) => onChange({ ...effect, scalable: event.target.checked })} /> Affected by spell power</label>
   </>;
-  if (effect.op === "freeze") return <label><span>Target</span><select value={effect.target} onChange={(event) => onChange({ ...effect, target: event.target.value as "selectedEnemy" | "allEnemies" })}><option value="selectedEnemy">Selected enemy</option><option value="allEnemies">All enemies</option></select></label>;
+  if (effect.op === "debuff") return <>
+    <label><span>Debuff</span><select value={effect.id} onChange={(event) => onChange({ ...effect, id: event.target.value as typeof effect.id })}><option value="debuff.freeze">Freeze</option></select></label>
+    <TargetField value={effect.target} onChange={(target) => onChange({ ...effect, target })} />
+    <ExpressionEditor value={effect.stacks} onChange={(stacks) => onChange({ ...effect, stacks })} label="Stacks / turns" />
+    <label className="check"><input type="checkbox" checked={effect.scalable ?? false} onChange={(event) => onChange({ ...effect, scalable: event.target.checked })} /> Affected by spell power</label>
+  </>;
+  if (effect.op === "freeze") return <TargetField value={effect.target} onChange={(target) => onChange({ ...effect, target })} />;
   if (effect.op === "armor" || effect.op === "heal" || effect.op === "draw") return <>
     <ExpressionEditor value={effect.amount} onChange={(amount) => onChange({ ...effect, amount } as Effect)} label="Amount" />
     <label className="check"><input type="checkbox" checked={effect.scalable ?? false} onChange={(event) => onChange({ ...effect, scalable: event.target.checked } as Effect)} /> Affected by spell power</label>
@@ -53,7 +63,7 @@ export function EffectEditor({ effects, onChange, nested = false }: Props) {
       <div className="effect-body"><EffectFields effect={effect} onChange={(next) => update(index, next)} /></div>
     </section>)}
     <div className="effect-palette" aria-label="Add effect">
-      {(["damage", "freeze", "armor", "heal", "draw", "mana", "addStatus", "setLocal", "incrementCounter", "if"] as Effect["op"][]).map((op) => <button type="button" key={op} onClick={() => onChange([...effects, newEffect(op)])}>+ {blockLabels[op]}</button>)}
+      {(["damage", "debuff", "armor", "heal", "draw", "mana", "addStatus", "setLocal", "incrementCounter", "if"] as Effect["op"][]).map((op) => <button type="button" key={op} onClick={() => onChange([...effects, newEffect(op)])}>+ {blockLabels[op]}</button>)}
     </div>
   </div>;
 }

@@ -164,7 +164,8 @@ local function drawEnemies()
             label("ATTACK", x + 10, y + 12, 116, "center", palette.muted, "tiny")
             label(enemy.pow, x + 10, y + 42, 116, "center", palette.gold, "label")
             if enemy.frozen then
-                label("FROZEN", x - 132, y + 112, 264, "center", { 0.35, 0.85, 1 }, "small")
+                local stacks = enemy.debuffs and enemy.debuffs["debuff.freeze"] or 1
+                label("FROZEN x" .. stacks, x - 132, y + 112, 264, "center", { 0.35, 0.85, 1 }, "small")
             end
             addZone("enemy", x - 154, y - 92, 308, 200, i)
         end
@@ -366,15 +367,19 @@ local function activate(zone)
         local index, card = zone.payload, game.hand[zone.payload]
         if not card then return end
         local definition = Cards.definition(card)
+        local requiresEnemyTarget = definition.target == "enemy" or definition.target == "multi"
         if game.selected == index then
-            if definition.target ~= "enemy" then game:play(index) else game.selected = nil end
+            if not requiresEnemyTarget then game:play(index) else game.selected = nil end
         else game.selected = index end
     elseif zone.id == "enemy" then
         if game.selected then game:play(game.selected, zone.payload) end
     elseif zone.id == "wizard" then
         if game.selected then
             local card = game.hand[game.selected]
-            if card and Cards.definition(card).target ~= "enemy" then game:play(game.selected) end
+            if card then
+                local target = Cards.definition(card).target
+                if target ~= "enemy" and target ~= "multi" then game:play(game.selected) end
+            end
         end
     elseif zone.id == "shop" then game:pickReward(zone.payload)
     elseif zone.id == "reset" then game:resetPicks()

@@ -4,7 +4,15 @@ node_modules/
 editor/public/game/
 concepts/
 game/assets/*.rres
-assets/
+# Keep general source assets out of Git, but ship the isometric tiles needed by
+# the browser room builder and its GitHub Pages build.
+assets/*
+!assets/isometric tileset/
+assets/isometric tileset/*
+!assets/isometric tileset/spritesheet.png
+!assets/isometric tileset/separated images/
+!assets/isometric tileset/separated images/*.png
+editor/public/tiles/
 docs/
 .luarc.json
 .DS_Store
