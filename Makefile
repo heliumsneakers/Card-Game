@@ -7,12 +7,12 @@ tools:
 	cmake -S . -B build
 	cmake --build build
 
-# Package source assets before launching the desktop game.
+# Optional packer workflow; the current game does not load this archive.
 assets: tools
 	./build/rrespack assets game/assets/game.rres
 
-# Start LÖVE after resolving the platform-specific executable path.
-run: assets
+# The Lua game runs directly from source; no native build or asset archive is needed.
+run:
 	@if [ -z "$(LOVE_BIN)" ]; then \
 		echo "LÖVE was not found."; \
 		echo "Install LÖVE 11.5, then retry: make run"; \

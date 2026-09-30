@@ -3,19 +3,26 @@
 ## Requirements
 
 - LÖVE 11.5
-- A C++17 compiler
-- CMake 3.16+
+- Make (for the commands below; `love game` also works directly)
+
+A C++17 compiler and CMake 3.16+ are needed only for the resource packer
+and the current `make test` target.
 
 ## Build and run
 
 ```sh
-cmake -S . -B build
-cmake --build build
-./build/rrespack assets game/assets/game.rres
-love game
+make run
 ```
 
-Or use `make run`.
+Run this from the repository root. It launches the Lua source with LÖVE; no
+`assets/` directory, resource archive, or `build/` directory is required.
+The current game draws its visuals directly and reads `game/content/content.json`.
+
+If LÖVE is not on your PATH, provide its executable explicitly:
+
+```sh
+make run LOVE_BIN="/path/to/love"
+```
 
 Run the headless gameplay checks with `make test` when LuaJIT is available.
 
@@ -145,6 +152,15 @@ npm run build:editor  # production editor bundle in dist/editor
 ```
 
 ## Packer
+
+This is an optional, separate workflow for packing files from an `assets/`
+directory you supply. The current game does not load the resulting archive.
+
+```sh
+make assets
+```
+
+To build just the packer, use `make tools`. Its command-line interface is:
 
 ```text
 rrespack <input-directory> <output.rres>
