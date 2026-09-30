@@ -1,19 +1,22 @@
 package.path = "game/?.lua;game/?/init.lua;" .. package.path
 
+-- Keep this content/interpreter test independent of a running LÖVE window.
 love = { math = { random = function(a) return a end } }
 
 local Content = require("src.content")
-local Cards = require("src.cards")
+local CardCatalog = require("src.cards")
+local CardPresentation = require("src.presentation.cards")
 local Game = require("src.game")
 local Encounters = require("src.encounters")
 
 local catalog, errors = Content.load("content/content.json")
 assert(catalog, errors and errors[1] and errors[1].message)
+local Cards = CardCatalog.new(catalog)
 assert(catalog.cards["card.firebolt"])
 assert(catalog.enemies["enemy.goblin"])
-assert(Cards.definition("Fireball").id == "card.fireball")
-assert(Cards.definition("Mend").element == "nature")
-assert(Cards.color("Arcane Ward") == Cards.elementColors.earth)
+assert(Cards:definition("Fireball").id == "card.fireball")
+assert(Cards:definition("Mend").element == "nature")
+assert(CardPresentation.color(Cards, "Arcane Ward") == CardPresentation.elementColors.earth)
 assert(math.abs(Encounters.enemyPower({
     damage = { min = 2, max = 3 }, hp = { min = 8, max = 9 }, generation = {},
 }) - 1) < 0.001)
@@ -31,42 +34,47 @@ local invalid = {
 }
 assert(#Content.validate(invalid) >= 5)
 
-local game = Game.new(30, 24680)
+local game = Game.new(30, 24680, { catalog = catalog })
 game:keepHand()
-game.enemies = { { name = "Dummy", pow = 0, tough = 20, maxTough = 20, alive = true, frozen = false, flash = 0 } }
-game.hand = { Cards.make("Firebolt"), Cards.make("Firebolt") }
-game.mana = 3
+game.combat.enemies = { { name = "Dummy", pow = 0, tough = 20, maxTough = 20, alive = true, frozen = false, flash = 0 } }
+game.deck.hand = { Cards:make("Firebolt"), Cards:make("Firebolt") }
+game.combat.mana = 3
 assert(game:play(1, 1))
-assert(game.enemies[1].tough == 18)
+assert(game.combat.enemies[1].tough == 18)
 assert(game:play(1, 1))
-assert(game.enemies[1].tough == 15)
-assert(game.previousCardId == "card.firebolt")
-assert(Cards.describe(Cards.make("Firebolt"), game):find("Deal 4* damage", 1, true))
+assert(game.combat.enemies[1].tough == 15)
+assert(game.combat.previousCardId == "card.firebolt")
+assert(CardPresentation.describe(Cards, Cards:make("Firebolt"), game):find("Deal 4* damage", 1, true))
 
-local Effects = require("src.effects")
-local formulaDescription = Effects.describe({
+local Descriptions = require("src.presentation.descriptions")
+local Combat = require("src.domain.combat")
+local formulaDescription = Descriptions.describe({
     description = "Deal {dmg=2+1} damage.",
     effects = { { op = "damage", target = "selectedEnemy", amount = { kind = "literal", value = 3 } } },
-}, game, { id = "card.formula_test" })
+}, Combat.queries(game.combat, game.run), "card.formula_test", Combat.surgeMultiplier(game.combat))
 assert(formulaDescription == "Deal 3* damage.")
 
 Cards.catalog.document.preview = { featuredCardId = "card.fireball" }
 game:openReward()
-assert(game.shopChoices[1] == "card.fireball", "previewed card should be pinned to the first shop slot")
+assert(game.rewards.choices[1] == "card.fireball", "previewed card should be pinned to the first shop slot")
 local eligibleCount = 0
 for _, id in ipairs(Cards.shopPool) do
-    local availability = Cards.definition(id).availability
-    if (availability.shopChance or 50) > 0 and game:deckCount(id) < availability.copyLimit then eligibleCount = eligibleCount + 1 end
+    local availability = Cards:definition(id).availability
+    if (availability.shopChance or 50) > 0 and game:deckCount(id) < availability.copyLimit then
+        eligibleCount = eligibleCount + 1
+    end
 end
-assert(#game.shopChoices == math.min(6, eligibleCount), "shop should fill all six slots when the pool allows")
+assert(#game.rewards.choices == math.min(6, eligibleCount), "shop should fill all six slots when the pool allows")
 
 local excludedId
 for _, id in ipairs(Cards.shopPool) do if id ~= "card.fireball" then excludedId = id; break end end
-local excludedDefinition = Cards.definition(excludedId)
+local excludedDefinition = Cards:definition(excludedId)
 local originalChance = excludedDefinition.availability.shopChance
 excludedDefinition.availability.shopChance = 0
 game:openReward()
-for _, id in ipairs(game.shopChoices) do assert(id ~= excludedId, "zero-percent cards should not enter the shop") end
+for _, id in ipairs(game.rewards.choices) do
+    assert(id ~= excludedId, "zero-percent cards should not enter the shop")
+end
 excludedDefinition.availability.shopChance = originalChance
 
 print("content schema and interpreter tests passed")

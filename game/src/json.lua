@@ -1,19 +1,24 @@
 local Json = {}
 
+-- Raise a parse error at the current byte without adding a Lua stack location.
 local function decodeError(source, index, message)
     error(string.format("JSON error at byte %d: %s", index, message), 0)
 end
 
+-- Parse one JSON value and reject trailing non-whitespace content.
 function Json.decode(source)
     assert(type(source) == "string", "JSON source must be a string")
     local index, length = 1, #source
 
+    -- Advance the shared cursor past spacing between JSON tokens.
     local function skipWhitespace()
         while index <= length and source:sub(index, index):match("%s") do index = index + 1 end
     end
 
+    -- Forward declaration lets arrays and objects recurse into the common value parser.
     local parseValue
 
+    -- Decode a quoted string, supported escapes, and individual Unicode code units.
     local function parseString()
         index = index + 1
         local result = {}
@@ -31,6 +36,7 @@ function Json.decode(source)
                 elseif escape == "u" then
                     local hex = source:sub(index + 2, index + 5)
                     if not hex:match("^%x%x%x%x$") then decodeError(source, index, "invalid unicode escape") end
+                    -- Convert one four-digit code unit to UTF-8; surrogate-pair combination is not implemented here.
                     local value = tonumber(hex, 16)
                     if value < 128 then
                         result[#result + 1] = string.char(value)
@@ -52,6 +58,7 @@ function Json.decode(source)
         decodeError(source, index, "unterminated string")
     end
 
+    -- Consume a JSON number with optional fraction and exponent.
     local function parseNumber()
         local start = index
         if source:sub(index, index) == "-" then index = index + 1 end
@@ -77,6 +84,7 @@ function Json.decode(source)
         return tonumber(source:sub(start, index - 1))
     end
 
+    -- Read comma-separated values until the array closes.
     local function parseArray()
         index = index + 1
         skipWhitespace()
@@ -93,6 +101,7 @@ function Json.decode(source)
         end
     end
 
+    -- Read string-keyed properties and enforce separators.
     local function parseObject()
         index = index + 1
         skipWhitespace()
@@ -115,6 +124,7 @@ function Json.decode(source)
         end
     end
 
+    -- Dispatch on the next token and advance the shared byte cursor.
     parseValue = function()
         skipWhitespace()
         local char = source:sub(index, index)
@@ -124,6 +134,7 @@ function Json.decode(source)
         elseif char == "-" or char:match("%d") then return parseNumber()
         elseif source:sub(index, index + 3) == "true" then index = index + 4; return true
         elseif source:sub(index, index + 4) == "false" then index = index + 5; return false
+        -- JSON null maps to nil; null entries are not preserved as distinct Lua table values.
         elseif source:sub(index, index + 3) == "null" then index = index + 4; return nil
         end
         decodeError(source, index, "unexpected token")

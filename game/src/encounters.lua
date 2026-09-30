@@ -16,9 +16,11 @@ Encounters.defaultEndless = {
     maximumBudgetRatio = 1.05,
 }
 
+-- Create a deterministic random stream isolated from Lua's global RNG.
 function Encounters.newRng(seed)
     local state = math.floor(math.abs(seed or 1)) % 2147483647
     if state == 0 then state = 1 end
+    -- Advance the private stream; no bounds gives a fraction, one bound means 1..maximum.
     return function(minimum, maximum)
         state = (state * 48271) % 2147483647
         local unit = state / 2147483647
@@ -28,6 +30,7 @@ function Encounters.newRng(seed)
     end
 end
 
+-- Estimate enemy difficulty from midpoint stats, unless explicitly overridden.
 function Encounters.enemyPower(enemy)
     local generation = enemy.generation or {}
     if generation.powerOverride then return generation.powerOverride end
@@ -36,6 +39,7 @@ function Encounters.enemyPower(enemy)
     return (averageHp / 8.5) * (0.4 + 0.6 * (averageDamage / 2.5))
 end
 
+-- Apply the existing difficulty premium for multiple enemies.
 function Encounters.groupMultiplier(count)
     if count <= 1 then return 1 end
     if count == 2 then return 1.5 end
@@ -43,12 +47,14 @@ function Encounters.groupMultiplier(count)
     return 2
 end
 
+-- Sum individual power and apply the group-size multiplier.
 function Encounters.encounterPower(enemies)
     local total = 0
     for _, enemy in ipairs(enemies) do total = total + Encounters.enemyPower(enemy) end
     return total * Encounters.groupMultiplier(#enemies)
 end
 
+-- Find authored room settings, with defaults for missing entries.
 function Encounters.roomConfig(document, roomNumber)
     for _, room in ipairs(document.roomCurve or DEFAULT_ROOMS) do
         if room.room == roomNumber then return room end
@@ -56,6 +62,7 @@ function Encounters.roomConfig(document, roomNumber)
     return DEFAULT_ROOMS[roomNumber]
 end
 
+-- Look up a generation tag, supporting the legacy top-level tag field.
 local function hasTag(enemy, sought)
     for _, tag in ipairs((enemy.generation or {}).tags or enemy.tags or {}) do
         if tag == sought then return true end
@@ -63,9 +70,11 @@ local function hasTag(enemy, sought)
     return false
 end
 
+-- Filter disabled, boss-only, and out-of-room enemies before generation.
 local function allowed(enemy, roomNumber, endless)
     local generation = enemy.generation or {}
     if enemy.enabled == false or generation.spawnEnabled == false or generation.bossOnly then return false end
+    -- Endless ignores room ranges but still respects enablement and boss exclusions.
     if not endless then
         if roomNumber < (generation.minimumRoom or 1) then return false end
         if generation.maximumRoom and roomNumber > generation.maximumRoom then return false end
@@ -73,6 +82,7 @@ local function allowed(enemy, roomNumber, endless)
     return true
 end
 
+-- Reject excluded tags and require each requested tag somewhere in the group.
 local function candidateMatchesTags(enemies, config)
     for _, tag in ipairs(config.excludedTags or {}) do
         for _, enemy in ipairs(enemies) do if hasTag(enemy, tag) then return false end end
@@ -85,17 +95,20 @@ local function candidateMatchesTags(enemies, config)
     return true
 end
 
+-- Enumerate eligible enemy multisets within size and per-enemy copy limits.
 local function allCandidates(catalog, config, roomNumber, endless)
     local pool = {}
     for _, enemy in ipairs(catalog.document.enemies) do
         if allowed(enemy, roomNumber, endless) then pool[#pool + 1] = enemy end
     end
+    -- Stable definition order keeps seeded choices independent of document ordering.
     table.sort(pool, function(a, b) return a.id < b.id end)
 
     local candidates, current, counts = {}, {}, {}
     local minimum = config.minimumEnemies or 1
     local maximum = math.min(4, config.maximumEnemies or 4)
 
+    -- Backtrack through nondecreasing pool indices to avoid duplicate permutations.
     local function visit(startIndex, targetCount)
         if #current == targetCount then
             if candidateMatchesTags(current, config) then
@@ -119,6 +132,7 @@ local function allCandidates(catalog, config, roomNumber, endless)
             if count < maximumCopies then
                 current[#current + 1] = enemy
                 counts[enemy.id] = count + 1
+                -- Allow another copy of this enemy, then undo the branch before trying its neighbor.
                 visit(index, targetCount)
                 counts[enemy.id] = count
                 current[#current] = nil
@@ -130,9 +144,11 @@ local function allCandidates(catalog, config, roomNumber, endless)
     return candidates
 end
 
+-- Choose a candidate in proportion to its accumulated spawn weight.
 local function weightedChoice(candidates, random)
     local total = 0
     for _, candidate in ipairs(candidates) do total = total + candidate.weight end
+    -- Map one random fraction onto contiguous intervals sized by candidate weights.
     local roll = random() * total
     for _, candidate in ipairs(candidates) do
         roll = roll - candidate.weight
@@ -141,6 +157,7 @@ local function weightedChoice(candidates, random)
     return candidates[#candidates]
 end
 
+-- Pick within budget when possible, otherwise return a documented fallback.
 function Encounters.generate(catalog, config, roomNumber, random, endless)
     local candidates = allCandidates(catalog, config, roomNumber, endless)
     if #candidates == 0 then return nil, "no eligible enemy combinations" end
@@ -154,12 +171,14 @@ function Encounters.generate(catalog, config, roomNumber, random, endless)
     end
     if #matches > 0 then return weightedChoice(matches, random) end
 
+    -- When no group fits the window, prefer a group below budget before using the weakest overall.
     local bestUnder
     for _, candidate in ipairs(candidates) do
         if candidate.power <= target and (not bestUnder or candidate.power > bestUnder.power) then bestUnder = candidate end
     end
     if bestUnder then return bestUnder, "used closest encounter below budget" end
 
+    -- Sorting by power makes the final fallback the weakest eligible composition.
     table.sort(candidates, function(a, b) return a.power < b.power end)
     return candidates[1], "used weakest eligible encounter"
 end
@@ -168,6 +187,7 @@ end
 -- reaches the endless target while keeping the selected composition intact.
 function Encounters.scaleForPower(enemies, targetPower)
     local multiplier = Encounters.groupMultiplier(#enemies)
+    -- Scaling HP contributes linearly; scaling both HP and damage adds a quadratic term.
     local linear, quadratic = 0, 0
     for _, enemy in ipairs(enemies) do
         local hp = (enemy.hp.min + enemy.hp.max) / 2

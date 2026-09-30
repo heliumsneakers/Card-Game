@@ -1,4 +1,4 @@
-import { literal, type CardDefinition, type ContentDocument, type Effect, type EndlessDefinition, type EnemyDefinition, type Expression, type RoomDefinition } from "./model";
+import { literal, type CardDefinition, type ContentDocument, type Effect, type EndlessDefinition, type EnemyDefinition, type Expression, type RoomDefinition } from "./model.ts";
 
 export interface Issue { path: string; message: string }
 
