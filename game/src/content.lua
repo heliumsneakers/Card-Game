@@ -2,10 +2,12 @@ local Json = require("src.json")
 
 local Content = { schemaVersion = 1 }
 
+-- Read packaged LÖVE content or fall back to disk paths for headless tools.
 local function readFile(path)
     if love and love.filesystem and love.filesystem.getInfo(path) then
         return love.filesystem.read(path)
     end
+    -- Headless callers may run from the repository root or from the game directory.
     local file = io.open("game/" .. path, "rb") or io.open(path, "rb")
     if not file then return nil, "could not open " .. path end
     local data = file:read("*a")
@@ -13,6 +15,7 @@ local function readFile(path)
     return data
 end
 
+-- Check a whole-number value against its inclusive lower bound.
 local function integer(value, minimum)
     return type(value) == "number" and value == math.floor(value) and value >= (minimum or 0)
 end
@@ -25,20 +28,24 @@ local validOps = {
     mana = true, addStatus = true, incrementCounter = true, setLocal = true, ["if"] = true,
 }
 
+-- Derive the name-based identifier required by the current content schema.
 local function contentId(kind, name)
     local slug = type(name) == "string" and name:lower():gsub("[^a-z0-9]+", "_"):gsub("^_+", ""):gsub("_+$", "") or ""
     if slug == "" then slug = "untitled" end
     return kind .. "." .. slug
 end
 
+-- Append a path-specific validation issue while allowing further checks.
 local function add(errors, path, message)
     errors[#errors + 1] = { path = path, message = message }
 end
 
+-- Check a numeric lower bound and optional upper bound.
 local function numberInRange(value, minimum, maximum)
     return type(value) == "number" and value >= minimum and (maximum == nil or value <= maximum)
 end
 
+-- Validate enemy counts and budget bounds for room or endless generation.
 local function validateEncounterSettings(settings, path, errors, needsPower)
     if type(settings) ~= "table" then add(errors, path, "encounter settings are required"); return end
     if needsPower and not numberInRange(settings.power, 0.01) then add(errors, path .. ".power", "power must be greater than zero") end
@@ -49,6 +56,7 @@ local function validateEncounterSettings(settings, path, errors, needsPower)
     if not numberInRange(settings.maximumBudgetRatio, minimumRatio) then add(errors, path .. ".maximumBudgetRatio", "must be at least minimumBudgetRatio") end
 end
 
+-- Accept the limited whole-number arithmetic syntax used in value tokens.
 local function validDescriptionFormula(source)
     local compact = source:gsub("%s+", "")
     return compact ~= ""
@@ -58,11 +66,13 @@ local function validDescriptionFormula(source)
         and compact:find("[+%-%*][+%-%*]") == nil
 end
 
+-- Validate authored prose and report malformed or unsupported value tokens.
 local function validateDescription(description, path, errors)
     if type(description) ~= "string" or description == "" or #description > 500 then
         add(errors, path, "description must contain 1-500 characters")
         return
     end
+    -- Remove recognized blocks while checking their formulas; leftover braces indicate malformed tokens.
     local remainder = description:gsub("{([a-z][a-z0-9_]*)%s*=%s*([^{}]+)}", function(_, formula)
         if not validDescriptionFormula(formula) then add(errors, path, "value formulas support whole numbers with +, - or *") end
         return ""
@@ -70,8 +80,10 @@ local function validateDescription(description, path, errors)
     if remainder:find("[{}]") then add(errors, path, "value blocks must look like {dmg=2}") end
 end
 
+-- Validate expression shape and operators with a bounded recursion depth.
 local function validateExpression(expression, path, errors, depth)
     depth = depth or 0
+    -- Bound recursion before descending through nested expression operands.
     if depth > 12 then add(errors, path, "expression nesting exceeds 12"); return end
     if type(expression) ~= "table" then add(errors, path, "must be an expression object"); return end
     local kind = expression.kind
@@ -99,6 +111,7 @@ local function validateExpression(expression, path, errors, depth)
     end
 end
 
+-- Validate effect lists and nested branches, collecting path-specific errors.
 local function validateEffects(effects, path, errors, depth)
     depth = depth or 0
     if type(effects) ~= "table" then add(errors, path, "must be an array"); return end
@@ -126,12 +139,14 @@ local function validateEffects(effects, path, errors, depth)
     end
 end
 
+-- Collect schema issues across cards, enemies, room curves, and endless settings.
 function Content.validate(document)
     local errors = {}
     if type(document) ~= "table" then return { { path = "$", message = "content must be an object" } } end
     if document.schemaVersion ~= Content.schemaVersion then add(errors, "schemaVersion", "only schema version 1 is supported") end
     if type(document.cards) ~= "table" then add(errors, "cards", "must be an array") end
     if type(document.enemies) ~= "table" then add(errors, "enemies", "must be an array") end
+    -- One ID set detects collisions across both cards and enemies.
     local ids = {}
     for index, card in ipairs(document.cards or {}) do
         local path = string.format("cards[%d]", index)
@@ -201,9 +216,11 @@ function Content.validate(document)
     return errors
 end
 
+-- Validate content and construct ID/name lookup tables referencing its definitions.
 function Content.compile(document)
     local errors = Content.validate(document)
     if #errors > 0 then return nil, errors end
+    -- Lookup tables reference the original definitions; compilation does not clone content.
     local catalog = { document = document, cards = {}, enemies = {}, cardNames = {} }
     for _, card in ipairs(document.cards) do
         catalog.cards[card.id] = card
@@ -213,9 +230,11 @@ function Content.compile(document)
     return catalog
 end
 
+-- Read and decode JSON, returning a catalog or a consistent list of issues.
 function Content.load(path)
     local source, readError = readFile(path or "content/content.json")
     if not source then return nil, { { path = "$", message = readError } } end
+    -- Convert parser failures into the same path/message shape as validation issues.
     local ok, document = pcall(Json.decode, source)
     if not ok then return nil, { { path = "$", message = document } } end
     return Content.compile(document)

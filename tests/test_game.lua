@@ -2,6 +2,7 @@ package.path = "game/?.lua;game/?/init.lua;" .. package.path
 
 love = {
     math = {
+        -- Supply only the LÖVE random shim expected by this headless setup.
         random = function(limit) return math.random(limit) end,
     },
 }
@@ -10,6 +11,7 @@ math.randomseed(12345)
 
 local Game = require("src.game")
 
+-- Report the scenario and both values when a gameplay expectation fails.
 local function equal(actual, expected, message)
     assert(actual == expected, string.format("%s: expected %s, got %s", message, tostring(expected), tostring(actual)))
 end

@@ -1,4 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
+# Configure the small native resource packer; the Lua game is run by LÖVE.
 project(cardgame_tools LANGUAGES CXX)
 
 add_executable(rrespack tools/rrespack.cpp)

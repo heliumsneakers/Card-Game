@@ -5,18 +5,25 @@ local Descriptions = require("src.presentation.descriptions")
 local Combat = require("src.domain.combat")
 local Game = require("src.game")
 local Content = require("src.content")
+-- Build an expression leaf for the synthetic effect definitions below.
 local function literal(value) return { kind = "literal", value = value } end
+-- Build a live scalar query expression for ordering tests.
 local function context(path) return { kind = "context", path = path } end
 
 -- The resolver runs without a Game object; later effects see earlier mutations.
 local mana, count, calls = 0, 0, {}
 local query = {
+    -- Reject unexpected reads while exposing the latest synthetic mana value.
     value = function(path) assert(path == "mana"); return mana end,
+    -- Verify current-card ID resolution and return the updated synthetic count.
     counter = function(id) assert(id == "card.test"); return count end,
 }
 local actions = {
+    -- Simulate capped mana mutation so later expressions must see the result.
     mana = function(amount, cap) mana = math.min(cap, mana + amount) end,
+    -- Verify the resolved counter ID before recording the increment.
     incrementCounter = function(id, amount) assert(id == "card.test"); count = count + amount end,
+    -- Record ordered damage calls without requiring a combat instance.
     damage = function(target, amount) calls[#calls + 1] = { target, amount } end,
 }
 Resolver.resolve({ effects = {

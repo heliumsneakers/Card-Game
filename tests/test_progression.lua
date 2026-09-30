@@ -4,6 +4,7 @@ local Game = require("src.game")
 local Controller = require("src.presentation.combat_controller")
 local Feedback = require("src.presentation.feedback")
 local catalog = assert(Content.load("content/content.json"))
+-- Create isolated runs with identical seeds for repeatable ownership and transition checks.
 local function newGame() return Game.new(30, 321, { catalog = catalog, feedback = Feedback.new() }) end
 local game = newGame()
 local other = newGame()

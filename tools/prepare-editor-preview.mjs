@@ -5,6 +5,7 @@ const source = resolve("dist/web");
 const destination = resolve("editor/public/game");
 
 await mkdir(destination, { recursive: true });
+// Copy the compiled game into the preview asset directory before patching its entry page.
 await cp(source, destination, { recursive: true, force: true });
 
 const indexPath = resolve(destination, "index.html");
@@ -13,6 +14,7 @@ const injection = `
     <script>
       // The editor stores a validated candidate before reloading this frame.
       // Register after game.js so this preRun callback overwrites packaged data.
+      // Accept preview-content messages only from the same origin and acknowledge storage.
       window.addEventListener("message", function (event) {
         if (event.origin !== window.location.origin || !event.data || event.data.type !== "cardgame.content.apply") return;
         try {
@@ -27,12 +29,14 @@ const injection = `
 const preload = `
     <script>
       Module.preRun = Module.preRun || [];
+      // Hold runtime startup while a saved draft replaces the packaged content file.
       Module.preRun.push(function () {
         var raw = localStorage.getItem("cardgame.preview.content");
         if (!raw) return;
         var dependency = "cardgame-editor-preview";
         Module.addRunDependency(dependency);
 
+        // Install the draft after package downloads finish, then release the startup dependency.
         function installPreviewContent() {
           // game.js creates packaged files asynchronously. Wait until it has
           // completed so the editor's file is the final version Lua sees.
@@ -43,6 +47,7 @@ const preload = `
 
           try {
             var parsed = JSON.parse(raw);
+            // Remove an earlier file if present; a missing file is expected on first installation.
             try { Module.FS_unlink("/content/content.json"); } catch (_) {}
             Module.FS_createPath("/", "content", true, true);
             Module.FS_createDataFile(
@@ -62,6 +67,7 @@ const preload = `
           } catch (error) {
             parent.postMessage({ type: "cardgame.content.result", requestId: null, ok: false, errors: [String(error)] }, window.location.origin);
           } finally {
+            // Release startup on success or failure so an invalid draft cannot leave the loader waiting.
             Module.removeRunDependency(dependency);
           }
         }
@@ -70,5 +76,6 @@ const preload = `
       });
     </script>
 `;
+// Register the message bridge before game.js and the preRun hook after it.
 html = html.replace('<script type="text/javascript" src="game.js"></script>', injection + '<script type="text/javascript" src="game.js"></script>' + preload);
 await writeFile(indexPath, html, "utf8");

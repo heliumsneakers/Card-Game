@@ -12,11 +12,13 @@ CardPresentation.elementColors = {
 
 local defaultElements = { DMG = "fire", DEF = "earth", HEAL = "nature", UTIL = "arcane" }
 
+-- Choose a card's element color, falling back to its category for older content.
 function CardPresentation.color(cards, cardOrReference)
     local definition = cards:definition(cardOrReference)
     return CardPresentation.elementColors[definition.element or defaultElements[definition.type]]
 end
 
+-- Adapt card definitions and optional live combat queries to text rendering.
 function CardPresentation.describe(cards, cardOrReference, game)
     local card = type(cardOrReference) == "table" and cardOrReference or cards:make(cardOrReference)
     return Descriptions.describe(cards:definition(card), game and Combat.queries(game.combat, game.run),

@@ -6,8 +6,10 @@ import { renderDescription, enemyPower, validateContent } from "../editor/src/co
 const fixture = JSON.parse(readFileSync(new URL("./fixtures/content_contract.json", import.meta.url), "utf8"));
 const source = JSON.parse(readFileSync(new URL("../game/content/content.json", import.meta.url), "utf8"));
 assert.deepEqual(validateContent(source), []);
+// Check the same authored description examples as the Lua runner.
 for (const item of fixture.descriptions) assert.equal(renderDescription(item.description, item.effects), item.expected);
 for (const item of fixture.enemies) assert.ok(Math.abs(enemyPower(item) - item.expectedPower) < 0.000001);
+// Isolate invalid edits so each check demonstrates an independent rejection.
 for (const edit of fixture.invalidEdits) {
   const document = structuredClone(source);
   document[edit.collection][0][edit.field] = edit.value;

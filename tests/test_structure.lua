@@ -4,6 +4,7 @@ package.path = "game/?.lua;game/?/init.lua;" .. package.path
 love = nil
 local Content = require("src.content")
 local loadContent = Content.load
+-- Fail if requiring rules unexpectedly reads content at module load time.
 Content.load = function() error("rules must not load content") end
 local Game = require("src.game")
 Content.load = loadContent
@@ -26,6 +27,7 @@ second.run.masterDeck[1] = "card.firebolt"
 second:restart()
 assert(second:deckCount("Fireball") == 9)
 
+-- Use a predictable seed source to distinguish fresh runs from fixed-seed restarts.
 local seed = 400
 local seeded = Game.new(30, nil, { catalog = catalog, seedSource = function() seed = seed + 1; return seed end })
 assert(seeded.run.runSeed == 401)
@@ -71,11 +73,14 @@ visible:restart()
 assert(feedback:flash(enemy) == 0 and feedback.messageTime == 1.5)
 
 -- Exercise screen/controller wiring with graphics calls stubbed, not gameplay.
+-- Replace graphics side effects while exercising real app and screen routing.
 local noop = function() end
 love = {
     timer = { getTime = function() return 0 end },
     graphics = {
+        -- Supply only the font metric used by button layout.
         newFont = function() return { getHeight = function() return 20 end } end,
+        -- Use the virtual resolution so layout tests need no scaling assumptions.
         getDimensions = function() return 1920, 1080 end,
     },
 }

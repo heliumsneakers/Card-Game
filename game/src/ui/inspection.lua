@@ -4,6 +4,7 @@ local CardView = require("src.ui.card_view")
 local Inspection = {}
 local VW, VH = 1920, 1080
 
+-- Render an enlarged card and targeting details while inspection is held.
 function Inspection.draw(game, inspectCard)
     if not inspectCard then return end
     UI.color(palette.ink, 0.88)

@@ -2,6 +2,7 @@ local UI = require("src.ui.ui")
 local palette = require("src.ui.theme")
 local Hud = {}
 
+-- Display run health, combat resources, active buffs, and encounter metadata.
 function Hud.draw(game)
     UI.rect(24, 24, 520, 122, { 0.12, 0.15, 0.19 }, palette.paper)
     UI.label("HEALTH", 48, 43, 190, "left", palette.muted, "tiny")

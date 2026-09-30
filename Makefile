@@ -2,13 +2,16 @@
 
 LOVE_BIN ?= $(shell if command -v love >/dev/null 2>&1; then command -v love; elif [ -x /Applications/love.app/Contents/MacOS/love ]; then echo /Applications/love.app/Contents/MacOS/love; elif [ -x /Applications/LÖVE.app/Contents/MacOS/love ]; then echo /Applications/LÖVE.app/Contents/MacOS/love; fi)
 
+# Build the native resource packer used by asset generation and the test target.
 tools:
 	cmake -S . -B build
 	cmake --build build
 
+# Package source assets before launching the desktop game.
 assets: tools
 	./build/rrespack assets game/assets/game.rres
 
+# Start LÖVE after resolving the platform-specific executable path.
 run: assets
 	@if [ -z "$(LOVE_BIN)" ]; then \
 		echo "LÖVE was not found."; \
@@ -18,6 +21,7 @@ run: assets
 	fi
 	"$(LOVE_BIN)" game
 
+# Compile Lua modules for syntax checks, then run each headless regression suite.
 test: tools
 	@find game -name '*.lua' -type f -print | while IFS= read -r file; do \
 		luajit -b "$$file" /tmp/cardgame-syntax.luac || exit 1; \
@@ -34,5 +38,6 @@ test-contract:
 	luajit tests/test_contract.lua
 	node --experimental-strip-types tests/test_contract.mts
 
+# Remove CMake-generated build products without deleting project source.
 clean:
 	cmake --build build --target clean

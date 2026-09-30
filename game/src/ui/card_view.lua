@@ -3,7 +3,9 @@ local UI = require("src.ui.ui")
 local palette = require("src.ui.theme")
 local CardView = {}
 
+-- Render a card's cost, identity, description, and optional interaction zone.
 function CardView.draw(card, game, x, y, w, h, selected, disabled, zoneId, payload)
+    -- Use immutable definition text and visuals alongside the instance-specific cost.
     local definition = game.cards:definition(card)
     local compact = w < 300
     local edge = selected and palette.gold or palette.paper

@@ -2,20 +2,25 @@
 local Controller = {}
 Controller.__index = Controller
 
+-- Bind combat interaction state to one game instance.
 function Controller.new(game)
     return setmetatable({ game = game }, Controller)
 end
 
+-- Cancel a pending card selection without changing gameplay.
 function Controller:clearSelection()
     self.selected = nil
 end
 
+-- Submit a play and clear selection only if the game accepts it.
 function Controller:play(index, targetIndex)
     local played = self.game:play(index, targetIndex)
+    -- Keep selection on rejection so the player can choose a valid target.
     if played then self:clearSelection() end
     return played
 end
 
+-- Clear selection for a valid end-turn request and delegate the rules.
 function Controller:endTurn()
     if self.game.run.state == "combat" and self.game.combat.phase == "player" then
         self:clearSelection()
@@ -23,6 +28,7 @@ function Controller:endTurn()
     self.game:endTurn()
 end
 
+-- Translate zone clicks into selection, targeting, mulligan, or turn actions.
 function Controller:activate(zone)
     local game = self.game
     if not zone then self.selected = nil; return end
@@ -34,6 +40,7 @@ function Controller:activate(zone)
         local index, card = zone.payload, game.deck.hand[zone.payload]
         if not card then return end
         local definition = game.cards:definition(card)
+        -- A second click plays self/all-target cards but cancels enemy-target selection.
         if self.selected == index then
             if definition.target ~= "enemy" then self:play(index) else self.selected = nil end
         else self.selected = index end
@@ -47,6 +54,7 @@ function Controller:activate(zone)
     end
 end
 
+-- Map the combat keyboard shortcut to the same end-turn path as the button.
 function Controller:keypressed(key)
     if key == "space" then self:endTurn() end
 end

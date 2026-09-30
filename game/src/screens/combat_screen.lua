@@ -6,10 +6,12 @@ local Combat = {}
 local VW = 1920
 local CARD_W, CARD_H = 220, 292
 
+-- Center the enemy row with fixed spacing for the current group size.
 local function enemyPosition(index, count)
     return VW / 2 + (index - (count + 1) / 2) * 390, 320
 end
 
+-- Draw living enemies, their feedback/status appearance, and target zones.
 local function drawEnemies(game, app)
     for i, enemy in ipairs(game.combat.enemies) do
         if enemy.alive then
@@ -33,6 +35,7 @@ local function drawEnemies(game, app)
     end
 end
 
+-- Draw the player avatar and the zone used for self-targeted cards.
 local function drawWizard(game)
     local x, y, w, h = 870, 500, 180, 190
     UI.rect(x, y, w, h, { 0.16, 0.26, 0.48 }, palette.gold)
@@ -42,6 +45,7 @@ local function drawWizard(game)
     UI.addZone("wizard", x - 8, y - 58, w + 16, h + 66)
 end
 
+-- Center the current hand and lift the controller's selected card.
 local function drawHand(game, app)
     local count = #game.deck.hand
     if count == 0 then return end
@@ -50,12 +54,14 @@ local function drawHand(game, app)
     local startX = math.floor((VW - total) / 2)
     for i, card in ipairs(game.deck.hand) do
         local x = startX + (i - 1) * (CARD_W + gap)
+        -- Selection changes layout only; the controller owns the interaction state.
         local selected = app.combatController.selected == i
         CardView.draw(card, game, x, 760 - (selected and 22 or 0), CARD_W, CARD_H,
             selected, card.cost > game.combat.mana, "card", i)
     end
 end
 
+-- Cover combat controls with the opening-hand decision panel.
 local function drawMulligan(game)
     UI.color(palette.ink, 0.82)
     love.graphics.rectangle("fill", 0, 0, VW, 720)
@@ -66,6 +72,7 @@ local function drawMulligan(game)
     UI.button("redraw", "REDRAW", 1000, 480, 280, 72, true, palette.red)
 end
 
+-- Compose combat visuals and phase-appropriate buttons from current state.
 function Combat.draw(game, app)
     Hud.draw(game)
     drawEnemies(game, app)
@@ -80,6 +87,7 @@ function Combat.draw(game, app)
     if game.combat.phase == "mulligan" then drawMulligan(game) end
 end
 
+-- Forward screen actions to the controller that owns combat interaction.
 function Combat.activate(game, zone, app)
     app.combatController:activate(zone)
 end

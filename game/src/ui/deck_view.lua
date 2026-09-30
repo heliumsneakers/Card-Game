@@ -4,6 +4,7 @@ local palette = require("src.ui.theme")
 local DeckView = {}
 local VW, VH = 1920, 1080
 
+-- Render permanent-deck counts and inspectable rows over a modal backdrop.
 function DeckView.draw(game)
     UI.color(palette.ink, 0.90)
     love.graphics.rectangle("fill", 0, 0, VW, VH)

@@ -4,12 +4,14 @@ local CardView = require("src.ui.card_view")
 local Reward = {}
 local VW = 1920
 
+-- Count pending picks for a card so its offer can show a quantity badge.
 local function shopPickCount(game, name)
     local count = 0
     for _, picked in ipairs(game.rewards.picks) do if picked == name then count = count + 1 end end
     return count
 end
 
+-- Draw reward offers, selected quantities, and selection/navigation controls.
 function Reward.draw(game)
     UI.label("CARD SHOP", 0, 28, VW, "center", palette.gold, "title")
     UI.label("Choose exactly 3 cards  •  " .. #game.rewards.picks .. " / 3 selected",
@@ -32,6 +34,7 @@ function Reward.draw(game)
     UI.button("descend", "DESCEND", 1148, 900, 280, 72, #game.rewards.picks == 3, palette.green)
 end
 
+-- Forward reward actions to the game and deck-overlay requests to the app.
 function Reward.activate(game, zone, app)
     if not zone then return end
     if zone.id == "shop" then game:pickReward(zone.payload)

@@ -1,3 +1,4 @@
+-- Shared display colors; gameplay rules never depend on this palette.
 local palette = {
     ink = { 0.08, 0.09, 0.12 }, paper = { 0.90, 0.86, 0.72 },
     gold = { 0.91, 0.70, 0.25 }, blue = { 0.20, 0.42, 0.58 },

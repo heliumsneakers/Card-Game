@@ -1,5 +1,6 @@
 package.path = "game/?.lua;game/?/init.lua;" .. package.path
 
+-- Keep this content/interpreter test independent of a running LÖVE window.
 love = { math = { random = function(a) return a end } }
 
 local Content = require("src.content")

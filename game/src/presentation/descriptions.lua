@@ -3,8 +3,10 @@ local amount = Expressions.amount
 local clampAmount = Expressions.clampAmount
 local Descriptions = {}
 
+-- Prefer a live expression value, falling back to symbolic text when unavailable.
 local function describeExpression(expression, context)
     if context then
+        -- Preview contexts may lack locals; keep readable fallback text instead of failing.
         local ok, value = pcall(Expressions.evaluate, expression, context)
         if ok then return tostring(value) end
     end
@@ -16,6 +18,7 @@ local function describeExpression(expression, context)
     return string.format("%s %s %s", describeExpression(expression.left), symbols[expression.operator] or expression.operator, describeExpression(expression.right))
 end
 
+-- Build fallback prose from supported effect blocks when no authored text exists.
 local function describeGenerated(definition, query, cardId, multiplier)
     local phrases = {}
     local context = query and { query = query, cardId = cardId, multiplier = multiplier, locals = {} } or nil
@@ -38,10 +41,12 @@ local function describeGenerated(definition, query, cardId, multiplier)
     return table.concat(phrases, " ")
 end
 
+-- Parse whole-number display arithmetic without executing Lua source.
 local function evaluateDisplayFormula(source)
     local compact = source:gsub("%s+", "")
     local length, position = #compact, 1
 
+    -- Consume the next unsigned integer from the compact display formula.
     local function parseNumber()
         local start = position
         while position <= length and compact:sub(position, position):match("%d") do position = position + 1 end
@@ -49,6 +54,7 @@ local function evaluateDisplayFormula(source)
         return tonumber(compact:sub(start, position - 1))
     end
 
+    -- Resolve multiplication before the outer addition/subtraction pass.
     local function parseTerm()
         local value = parseNumber()
         if value == nil then return nil end
@@ -79,6 +85,7 @@ local tokenOps = {
     mana = "mana", stacks = "addStatus",
 }
 
+-- Index value-bearing effects in traversal order for description placeholders.
 local function collectValueEffects(effects, values)
     for _, effect in ipairs(effects) do
         if tokenOps.dmg == effect.op or tokenOps.armor == effect.op or tokenOps.heal == effect.op
@@ -86,12 +93,14 @@ local function collectValueEffects(effects, values)
             values[effect.op] = values[effect.op] or {}
             values[effect.op][#values[effect.op] + 1] = effect
         elseif effect.op == "if" then
+            -- Index both branches for stable token numbering; this does not execute either branch.
             collectValueEffects(effect["then"] or {}, values)
             collectValueEffects(effect["else"] or {}, values)
         end
     end
 end
 
+-- Evaluate top-level local declarations for previews without executing actions.
 local function primeDescriptionLocals(effects, context)
     for _, effect in ipairs(effects) do
         if effect.op == "setLocal" then
@@ -101,18 +110,21 @@ local function primeDescriptionLocals(effects, context)
     end
 end
 
+-- Replace authored value tokens with live amounts or their baseline formulas.
 local function renderDescription(definition, query, cardId, multiplier)
     local context = query and { query = query, cardId = cardId, multiplier = multiplier, locals = {} } or nil
     if context then primeDescriptionLocals(definition.effects, context) end
 
     local values, occurrences = {}, {}
     collectValueEffects(definition.effects, values)
+    -- Resolve each token independently; authored baseline values remain the fallback.
     local rendered = definition.description:gsub("{([a-z][a-z0-9_]*)%s*=%s*([^{}]+)}", function(name, formula)
         local baseline, usesFormula = evaluateDisplayFormula(formula)
         if baseline == nil then return "?" end
         local baseName = name:gsub("%d+$", "")
         local op = tokenOps[baseName]
         occurrences[baseName] = (occurrences[baseName] or 0) + 1
+        -- A suffix such as dmg2 selects an effect explicitly; otherwise use occurrence order.
         local explicitIndex = tonumber(name:match("(%d+)$"))
         local effect = op and values[op] and values[op][explicitIndex or occurrences[baseName]]
         local resolved = baseline
@@ -120,12 +132,14 @@ local function renderDescription(definition, query, cardId, multiplier)
             local ok, value = pcall(amount, effect, context, effect.op == "addStatus" and "stacks" or "amount")
             if ok then resolved = value end
         end
+        -- The asterisk marks arithmetic baselines or amounts changed by live evaluation.
         local modified = usesFormula or resolved ~= baseline
         return tostring(resolved) .. (modified and "*" or "")
     end)
     return rendered
 end
 
+-- Use authored text when present, otherwise generate supported effect prose.
 function Descriptions.describe(definition, query, cardId, multiplier)
     if type(definition.description) == "string" and definition.description ~= "" then
         return renderDescription(definition, query, cardId, multiplier)

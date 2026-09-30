@@ -1,3 +1,4 @@
+-- Configure the save identity and resizable LÖVE window before the app loads.
 function love.conf(t)
     t.identity = "pixel-card-game"
     t.version = "11.5"
