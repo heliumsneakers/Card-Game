@@ -23,7 +23,9 @@ struct Asset {
     std::uint32_t id = 0;
 };
 
+// Compute the archive CRC32 for raw bytes using the same polynomial as the Lua reader.
 std::uint32_t crc32(const std::uint8_t* data, std::size_t size) {
+    // Construct the bytewise CRC lookup once, then reuse it for every resource.
     static const auto table = [] {
         std::array<std::uint32_t, 256> values{};
         for (std::uint32_t n = 0; n < values.size(); ++n) {
@@ -43,10 +45,12 @@ std::uint32_t crc32(const std::uint8_t* data, std::size_t size) {
     return crc ^ 0xFFFFFFFFu;
 }
 
+// Hash normalized resource names through the same byte-oriented checksum.
 std::uint32_t crc32(const std::string& value) {
     return crc32(reinterpret_cast<const std::uint8_t*>(value.data()), value.size());
 }
 
+// Write a 16-bit little-endian field independently of host byte order.
 void writeU16(std::ostream& out, std::uint16_t value) {
     const std::array<char, 2> bytes{
         static_cast<char>(value & 0xFFu),
@@ -55,6 +59,7 @@ void writeU16(std::ostream& out, std::uint16_t value) {
     out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
 }
 
+// Write a 32-bit little-endian field independently of host byte order.
 void writeU32(std::ostream& out, std::uint32_t value) {
     const std::array<char, 4> bytes{
         static_cast<char>(value & 0xFFu),
@@ -65,6 +70,7 @@ void writeU32(std::ostream& out, std::uint32_t value) {
     out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
 }
 
+// Append a little-endian property word to an in-memory resource block.
 void appendU32(std::vector<std::uint8_t>& bytes, std::uint32_t value) {
     bytes.push_back(static_cast<std::uint8_t>(value));
     bytes.push_back(static_cast<std::uint8_t>(value >> 8u));
@@ -72,6 +78,7 @@ void appendU32(std::vector<std::uint8_t>& bytes, std::uint32_t value) {
     bytes.push_back(static_cast<std::uint8_t>(value >> 24u));
 }
 
+// Pack four extension characters into a property word, padding missing bytes with zero.
 std::uint32_t extensionWord(const std::string& extension, std::size_t offset) {
     std::uint32_t result = 0;
     for (std::size_t i = 0; i < 4; ++i) {
@@ -82,6 +89,7 @@ std::uint32_t extensionWord(const std::string& extension, std::size_t offset) {
     return result;
 }
 
+// Read one complete binary asset and report open, size, or read failures.
 std::vector<std::uint8_t> readFile(const fs::path& path) {
     std::ifstream input(path, std::ios::binary | std::ios::ate);
     if (!input) throw std::runtime_error("could not open input: " + path.string());
@@ -96,6 +104,7 @@ std::vector<std::uint8_t> readFile(const fs::path& path) {
     return bytes;
 }
 
+// Enumerate visible files, normalize names, sort output, and reject path-hash collisions.
 std::vector<Asset> collectAssets(const fs::path& root, const fs::path& output) {
     std::vector<Asset> assets;
     const fs::path canonicalOutput = fs::absolute(output).lexically_normal();
@@ -104,6 +113,7 @@ std::vector<Asset> collectAssets(const fs::path& root, const fs::path& output) {
         if (fs::absolute(entry.path()).lexically_normal() == canonicalOutput) continue;
 
         const fs::path relative = fs::relative(entry.path(), root);
+        // Exclude a file when any relative path component begins with a dot.
         const bool hidden = std::any_of(relative.begin(), relative.end(), [](const fs::path& part) {
             const std::string name = part.string();
             return !name.empty() && name.front() == '.';
@@ -116,10 +126,12 @@ std::vector<Asset> collectAssets(const fs::path& root, const fs::path& output) {
         asset.id = crc32(asset.name);
         assets.push_back(std::move(asset));
     }
+    // Sort by normalized name so filesystem traversal order cannot change the archive.
     std::sort(assets.begin(), assets.end(), [](const Asset& a, const Asset& b) {
         return a.name < b.name;
     });
 
+    // Distinct names must not silently share the reader's checksum-based lookup key.
     std::unordered_map<std::uint32_t, std::string> ids;
     for (const auto& asset : assets) {
         const auto [it, inserted] = ids.emplace(asset.id, asset.name);
@@ -130,6 +142,7 @@ std::vector<Asset> collectAssets(const fs::path& root, const fs::path& output) {
     return assets;
 }
 
+// Write an rres header followed by one uncompressed RAWD chunk per asset.
 void pack(const fs::path& root, const fs::path& output) {
     if (!fs::is_directory(root)) throw std::runtime_error("input is not a directory: " + root.string());
     auto assets = collectAssets(root, output);
@@ -139,6 +152,7 @@ void pack(const fs::path& root, const fs::path& output) {
     std::ofstream out(output, std::ios::binary | std::ios::trunc);
     if (!out) throw std::runtime_error("could not create output: " + output.string());
 
+    // The fixed 16-byte file header declares version and chunk count.
     out.write("rres", 4);
     writeU16(out, kRresVersion);
     writeU16(out, static_cast<std::uint16_t>(assets.size()));
@@ -153,12 +167,14 @@ void pack(const fs::path& root, const fs::path& output) {
         }
 
         std::string extension = asset.source.extension().string();
+        // Lowercase extensions for consistent type hints when LÖVE decodes FileData.
         std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) {
             return static_cast<char>(std::tolower(c));
         });
         if (extension.size() > 8) extension.resize(8);
 
         std::vector<std::uint8_t> chunkData;
+        // Checksum properties together with payload, matching the Lua reader's integrity check.
         chunkData.reserve(20 + asset.bytes.size());
         appendU32(chunkData, 4);
         appendU32(chunkData, static_cast<std::uint32_t>(asset.bytes.size()));
@@ -167,6 +183,7 @@ void pack(const fs::path& root, const fs::path& output) {
         appendU32(chunkData, 0);
         chunkData.insert(chunkData.end(), asset.bytes.begin(), asset.bytes.end());
 
+        // The 32-byte chunk header precedes the property block and original file bytes.
         out.write("RAWD", 4);
         writeU32(out, asset.id);
         out.put(0); // RRES_COMP_NONE
@@ -190,6 +207,7 @@ void pack(const fs::path& root, const fs::path& output) {
 
 } // namespace
 
+// Validate CLI arguments and translate packing failures into a nonzero exit status.
 int main(int argc, char** argv) {
     if (argc != 3) {
         std::cerr << "usage: rrespack <input-directory> <output.rres>\n";
