@@ -8,9 +8,9 @@ import { CounterField } from "./CounterField";
 export interface FieldProps { effect: Effect; onChange: (effect: Effect) => void }
 
 /** Select an enemy group independently from the numeric amount. */
-function TargetField({ value, onChange }: { value: EffectTarget; onChange: (target: EffectTarget) => void }) {
+function TargetField({ value, onChange, allowMultiple = false }: { value: EffectTarget; onChange: (target: EffectTarget) => void; allowMultiple?: boolean }) {
   // Card-level target compatibility is checked by the content validator.
-  return <label><span>Target</span><select value={value} onChange={(event) => onChange(event.target.value as EffectTarget)}><option value="selectedEnemy">Selected enemy</option><option value="otherEnemies">All other enemies</option><option value="allEnemies">All enemies</option></select></label>;
+  return <label><span>Target</span><select value={value} onChange={(event) => onChange(event.target.value as EffectTarget)}><option value="selectedEnemy">Selected enemy</option>{allowMultiple && <option value="selectedEnemies">Choose multiple enemies</option>}<option value="otherEnemies">All other enemies</option><option value="allEnemies">All enemies</option></select></label>;
 }
 
 /** Share spell-power controls across value-bearing effects. */
@@ -25,7 +25,12 @@ export function AmountFields({ effect, onChange }: FieldProps) {
   if (!("amount" in effect) || typeof effect.amount === "number") return null;
   // Targets and caps remain optional capabilities of the selected operation.
   return <>
-    {"target" in effect && <TargetField value={effect.target} onChange={(target) => onChange({ ...effect, target })} />}
+    {"target" in effect && <TargetField value={effect.target} allowMultiple={effect.op === "damage"} onChange={(target) => {
+      if (effect.op !== "damage") return onChange({ ...effect, target });
+      const { targetCount: _oldCount, ...withoutCount } = effect;
+      onChange(target === "selectedEnemies" ? { ...effect, target, targetCount: effect.targetCount || 2 } : { ...withoutCount, target });
+    }} />}
+    {effect.op === "damage" && effect.target === "selectedEnemies" && <label><span>Enemies to choose</span><input type="number" min="1" step="1" value={effect.targetCount ?? 2} onChange={(event) => onChange({ ...effect, targetCount: Number(event.target.value) })} /></label>}
     <ExpressionEditor value={effect.amount} onChange={(amount) => onChange({ ...effect, amount } as Effect)} label="Amount" />
     {effect.op === "mana" && <label><span>Mana cap</span><input type="number" min="0" value={effect.cap} onChange={(event) => onChange({ ...effect, cap: Number(event.target.value) })} /></label>}
     <ScalingField effect={effect} onChange={onChange} />

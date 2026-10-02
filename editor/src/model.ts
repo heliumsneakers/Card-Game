@@ -4,7 +4,7 @@ import { effectDefaults } from "./effects/defaults.ts";
 export type CardType = "DMG" | "DEF" | "HEAL" | "UTIL";
 export type CardElement = "fire" | "ice" | "nature" | "earth" | "arcane";
 export type CardTarget = "enemy" | "multi" | "all" | "self";
-export type EffectTarget = "selectedEnemy" | "otherEnemies" | "allEnemies";
+export type EffectTarget = "selectedEnemy" | "selectedEnemies" | "otherEnemies" | "allEnemies";
 
 /** Ownership is independent from the counter name and reset timing. */
 export type CounterOwner =
@@ -26,7 +26,7 @@ export type Expression =
   | { kind: "compare"; operator: "eq" | "ne" | "lt" | "lte" | "gt" | "gte"; left: Expression; right: Expression };
 
 export type Effect =
-  | { op: "damage"; target: EffectTarget; amount: Expression; scalable?: boolean }
+  | { op: "damage"; target: EffectTarget; targetCount?: number; amount: Expression; scalable?: boolean }
   | { op: "damageBonus"; element?: CardElement | "this"; category?: CardType | "this"; amount: Expression; scalable?: boolean; scope: "turn" | "combat" }
   | { op: "debuff"; id: DebuffId; target: EffectTarget; stacks: Expression; scalable?: boolean; bonusDamage?: Expression; damageScalable?: boolean }
   /** Legacy schema-v1 Freeze effects are migrated to a debuff block on load. */
