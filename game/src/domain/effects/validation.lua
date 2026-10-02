@@ -17,8 +17,9 @@ local function copy(values)
 end
 
 -- Validate expression types, counter ownership, and ordered local visibility.
-function Validation.effects(effects, path, errors, depth, cardTarget, cardIds, locals)
+function Validation.effects(effects, path, errors, depth, cardTarget, cardIds, locals, chosenTargetCounts)
     depth, locals = depth or 0, locals or {}
+    chosenTargetCounts = chosenTargetCounts or {}
     -- Keep diagnostics path-specific so imports fail before reaching the resolver.
     local function add(at, message) errors[#errors + 1] = { path = at, message = message } end
     if type(effects) ~= "table" then add(path, "effects must be an array"); return locals end
@@ -113,8 +114,8 @@ function Validation.effects(effects, path, errors, depth, cardTarget, cardIds, l
             local op = effect.op
             if op == "if" then
                 expect(effect.condition, at .. ".condition", "boolean")
-                local yes = Validation.effects(effect["then"], at .. ".then", errors, depth + 1, cardTarget, cardIds, copy(locals))
-                local no = Validation.effects(effect["else"] or {}, at .. ".else", errors, depth + 1, cardTarget, cardIds, copy(locals))
+                local yes = Validation.effects(effect["then"], at .. ".then", errors, depth + 1, cardTarget, cardIds, copy(locals), chosenTargetCounts)
+                local no = Validation.effects(effect["else"] or {}, at .. ".else", errors, depth + 1, cardTarget, cardIds, copy(locals), chosenTargetCounts)
                 -- Retain only assignments with the same type on both outcomes.
                 locals = {}
                 for name, kind in pairs(yes) do if no[name] == kind then locals[name] = kind end end
@@ -148,12 +149,23 @@ function Validation.effects(effects, path, errors, depth, cardTarget, cardIds, l
                 if op == "mana" and effect.cap ~= nil and not integer(effect.cap) then add(at, "invalid mana cap") end
                 if op == "damage" or op == "debuff" or op == "freeze" then
                     local target = effect.target
-                    if target ~= "selectedEnemy" and target ~= "otherEnemies" and target ~= "allEnemies" then add(at, "unsupported enemy target") end
+                    if target == "selectedEnemies" then
+                        if op ~= "damage" then add(at, "choosing multiple enemies is supported by damage effects") end
+                        if cardTarget ~= "multi" then add(at, "choosing multiple enemies requires a multi card target") end
+                        if not integer(effect.targetCount) or effect.targetCount < 1 then add(at .. ".targetCount", "choose a positive whole number of enemies")
+                        else chosenTargetCounts[#chosenTargetCounts + 1] = effect.targetCount end
+                    elseif target ~= "selectedEnemy" and target ~= "otherEnemies" and target ~= "allEnemies" then add(at, "unsupported enemy target") end
                     if target == "selectedEnemy" and cardTarget ~= "enemy" and cardTarget ~= "multi" then add(at, "selected enemy requires enemy or multi card target") end
                     if target == "otherEnemies" and cardTarget ~= "multi" then add(at, "other enemies requires multi card target") end
                     if target == "allEnemies" and cardTarget ~= "all" and cardTarget ~= "multi" then add(at, "all enemies requires all or multi card target") end
                 end
             end
+        end
+    end
+    -- All branches share one selection, so their chosen-enemy counts must agree.
+    if depth == 0 then
+        for _, count in ipairs(chosenTargetCounts) do
+            if count ~= chosenTargetCounts[1] then add(path, "all chosen-enemy damage effects on a card must use the same enemy count"); break end
         end
     end
     return locals

@@ -78,8 +78,13 @@ function Game:surgeMultiplier()
 end
 
 -- Check run state before asking combat to validate cost, phase, and target.
-function Game:canPlay(index, targetIndex)
-    return self.run.state == "combat" and Combat.canPlay(self.combat, self.deck, self.cards, index, targetIndex)
+function Game:canPlay(index, targetIndex, targetIndices)
+    return self.run.state == "combat" and Combat.canPlay(self.combat, self.deck, self.cards, index, targetIndex, targetIndices)
+end
+
+-- Report the number of chosen enemies required by a card in hand.
+function Game:targetRequirement(index)
+    return Combat.targetRequirement(self.cards, index, self.deck)
 end
 
 -- Apply enemy damage and its optional visual feedback.
@@ -93,9 +98,9 @@ function Game:resolveCard(card, targetIndex)
 end
 
 -- Resolve a legal play, then advance progression only after all card work finishes.
-function Game:play(index, targetIndex)
+function Game:play(index, targetIndex, targetIndices)
     if self.run.state ~= "combat" then return false end
-    local played = Combat.play(self.combat, self.deck, self.run, self.cards, self.random, self.feedback, index, targetIndex)
+    local played = Combat.play(self.combat, self.deck, self.run, self.cards, self.random, self.feedback, index, targetIndex, targetIndices)
     -- Progression runs after effects, discarding, and mirror copies have completed.
     if played then self:checkEncounterClear() end
     return played

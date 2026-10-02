@@ -134,7 +134,11 @@ export function previewEffects(card: Pick<CardDefinition, "id" | "effects"> & Pa
         const bonusDamage = effect.op === "debuff" && effect.bonusDamage ? amount(effect.bonusDamage, effect.damageScalable) : 0;
         if (effect.op === "debuff" && effect.bonusDamage) bonusDamageValues.set(effect, bonusDamage);
         if (effect.op === "damage" || effect.op === "debuff" || effect.op === "freeze") {
-          const targets = state.enemies.map((hp, i) => hp > 0 && (effect.target === "allEnemies" || (effect.target === "selectedEnemy" ? i === state.targetIndex : i !== state.targetIndex)) ? i : -1).filter((i) => i >= 0);
+          const chosenCount = effect.op === "damage" && effect.target === "selectedEnemies" ? effect.targetCount ?? 0 : 0;
+          const chosenTargets = chosenCount > 0 && state.enemies.length > 0
+            ? Array.from({ length: chosenCount }, (_, offset) => (state.targetIndex + offset) % state.enemies.length)
+            : [];
+          const targets = state.enemies.map((hp, i) => hp > 0 && (effect.target === "allEnemies" || (effect.target === "selectedEnemy" ? i === state.targetIndex : effect.target === "selectedEnemies" ? chosenTargets.includes(i) : i !== state.targetIndex)) ? i : -1).filter((i) => i >= 0);
           result = targets.length ? targets.map((i) => {
             if (effect.op === "damage") {
               const before = state.enemies[i];

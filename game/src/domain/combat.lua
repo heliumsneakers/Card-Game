@@ -97,7 +97,7 @@ function Combat.queries(state, player, piles, targetIndex, previewCost)
 end
 
 -- Visit living targets for either the selected slot or the entire enemy group.
-local function eachTarget(state, target, targetIndex, callback)
+local function eachTarget(state, target, targetIndex, targetIndices, callback)
     if target == "allEnemies" then
         for _, enemy in ipairs(state.enemies) do
             if enemy.alive then callback(enemy) end
@@ -106,6 +106,12 @@ local function eachTarget(state, target, targetIndex, callback)
         -- Recheck aliveness per effect because an earlier block may have killed the target.
         local enemy = state.enemies[targetIndex or 0]
         if enemy and enemy.alive then callback(enemy) end
+    elseif target == "selectedEnemies" then
+        -- Keep authored selection order and skip enemies killed by earlier effects.
+        for _, index in ipairs(targetIndices or {}) do
+            local enemy = state.enemies[index]
+            if enemy and enemy.alive then callback(enemy) end
+        end
     elseif target == "otherEnemies" then
         for index, enemy in ipairs(state.enemies) do
             if index ~= targetIndex and enemy.alive then callback(enemy) end
@@ -114,19 +120,19 @@ local function eachTarget(state, target, targetIndex, callback)
 end
 
 -- Closures bind the chosen target and dependencies. Handlers cannot reach state.
-effectActions = function(state, piles, player, random, feedback, targetIndex, sourceCard)
+effectActions = function(state, piles, player, random, feedback, targetIndex, sourceCard, targetIndices)
     return {
         -- Bind target resolution and damage feedback behind one mutation operation.
         damage = function(target, amount)
             -- Add matching passive bonuses once, then use the same total per target.
             local modifiedAmount = amount + DamageModifiers.amount(state, sourceCard)
-            eachTarget(state, target, targetIndex, function(enemy) Combat.damageEnemy(state, enemy, modifiedAmount, feedback) end)
+            eachTarget(state, target, targetIndex, targetIndices, function(enemy) Combat.damageEnemy(state, enemy, modifiedAmount, feedback) end)
         end,
         -- Store additive damage bonuses outside card-specific damage formulas.
         damageBonus = function(effect, amount) DamageModifiers.add(state, sourceCard, effect, amount) end,
         -- Debuffs share target selection and retain their authoritative stack count.
         debuff = function(target, id, stacks, bonusDamage)
-            eachTarget(state, target, targetIndex, function(enemy)
+            eachTarget(state, target, targetIndex, targetIndices, function(enemy)
                 Debuffs.apply(enemy, id, stacks, bonusDamage)
             end)
         end,
@@ -155,6 +161,26 @@ effectActions = function(state, piles, player, random, feedback, targetIndex, so
     }
 end
 
+-- Find the chosen-enemy count, including conditional damage branches.
+local function chosenEnemyCount(effects)
+    for _, effect in ipairs(effects or {}) do
+        if effect.op == "damage" and effect.target == "selectedEnemies" then return effect.targetCount end
+        if effect.op == "if" then
+            local count = chosenEnemyCount(effect["then"])
+            if count then return count end
+            count = chosenEnemyCount(effect["else"])
+            if count then return count end
+        end
+    end
+end
+
+-- Expose the selection count needed before a card can resolve.
+function Combat.targetRequirement(cards, index, piles)
+    local card = piles.hand[index]
+    if not card then return nil end
+    return chosenEnemyCount(cards:definition(card).effects)
+end
+
 -- Leave mulligan with the original hand; later requests have no effect.
 function Combat.keepHand(state)
     if state.phase == "mulligan" then Combat.setPhase(state, "player") end
@@ -174,11 +200,22 @@ function Combat.surgeMultiplier(state)
 end
 
 -- Check phase, card cost, and any required living enemy target without mutation.
-function Combat.canPlay(state, piles, cards, index, targetIndex)
+function Combat.canPlay(state, piles, cards, index, targetIndex, targetIndices)
     if state.phase ~= "player" then return false end
     local card = piles.hand[index]
     if not card or card.cost > state.mana then return false end
     local definition = cards:definition(card)
+    local requiredCount = chosenEnemyCount(definition.effects)
+    if requiredCount then
+        if type(targetIndices) ~= "table" or #targetIndices ~= requiredCount then return false end
+        local seen = {}
+        for _, selectedIndex in ipairs(targetIndices) do
+            local enemy = state.enemies[selectedIndex]
+            if not enemy or not enemy.alive or seen[selectedIndex] then return false end
+            seen[selectedIndex] = true
+        end
+        targetIndex = targetIndices[1]
+    end
     if definition.target == "enemy" or definition.target == "multi" then
         local enemy = state.enemies[targetIndex or 0]
         return enemy ~= nil and enemy.alive
@@ -195,11 +232,11 @@ function Combat.damageEnemy(state, enemy, amount, feedback)
 end
 
 -- Execute effects with captured spell power, then apply its consumption rule.
-function Combat.resolveCard(state, piles, player, cards, random, feedback, card, targetIndex)
+function Combat.resolveCard(state, piles, player, cards, random, feedback, card, targetIndex, targetIndices)
     local definition = cards:definition(card)
     -- Capture the multiplier now, while scalar queries remain live during execution.
     Resolver.resolve(definition, card.id, Combat.queries(state, player),
-        effectActions(state, piles, player, random, feedback, targetIndex, definition), Combat.surgeMultiplier(state), card.instanceId)
+        effectActions(state, piles, player, random, feedback, targetIndex, definition, targetIndices), Combat.surgeMultiplier(state), card.instanceId)
     -- Only definitions that explicitly retain spell power leave its stacks available.
     local retainsSpellPower = false
     for _, id in ipairs(definition.retainsStatuses or {}) do
@@ -211,8 +248,8 @@ function Combat.resolveCard(state, piles, player, cards, random, feedback, card,
 end
 
 -- Spend resources and resolve the card, including discard and mirror-copy handling.
-function Combat.play(state, piles, player, cards, random, feedback, index, targetIndex)
-    if not Combat.canPlay(state, piles, cards, index, targetIndex) then return false end
+function Combat.play(state, piles, player, cards, random, feedback, index, targetIndex, targetIndices)
+    if not Combat.canPlay(state, piles, cards, index, targetIndex, targetIndices) then return false end
 
     -- Remove and pay before effects so draws see the freed hand slot and updated mana.
     local card = table.remove(piles.hand, index)
@@ -222,7 +259,7 @@ function Combat.play(state, piles, player, cards, random, feedback, index, targe
     -- effect lets a played Mirror Image establish a fresh future trigger.
     local mirrorCopies = state.statuses["status.mirror"] or 0
     state.statuses["status.mirror"] = 0
-    Combat.resolveCard(state, piles, player, cards, random, feedback, card, targetIndex)
+    Combat.resolveCard(state, piles, player, cards, random, feedback, card, targetIndex or (targetIndices and targetIndices[1]), targetIndices)
     state.previousCardId = card.id
 
     Deck.discardPlayed(piles, card)

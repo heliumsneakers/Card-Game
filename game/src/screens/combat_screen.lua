@@ -12,15 +12,24 @@ local function enemyPosition(index, count)
     return VW / 2 + (index - (count + 1) / 2) * 390, 320
 end
 
+-- Check whether this enemy is part of the pending card's target selection.
+local function targetIsSelected(controller, enemyIndex)
+    for _, selectedIndex in ipairs(controller.targetIndices or {}) do
+        if selectedIndex == enemyIndex then return true end
+    end
+    return false
+end
+
 -- Draw living enemies, their feedback/status appearance, and target zones.
 local function drawEnemies(game, app)
     for i, enemy in ipairs(game.combat.enemies) do
         if enemy.alive then
             local x, y = enemyPosition(i, #game.combat.enemies)
-            local fill = enemy.isBoss and { 0.36, 0.13, 0.23 } or { 0.24, 0.28, 0.28 }
+            local chosen = targetIsSelected(app.combatController, i)
+            local fill = chosen and { 0.10, 0.38, 0.22 } or (enemy.isBoss and { 0.36, 0.13, 0.23 } or { 0.24, 0.28, 0.28 })
             if app.feedback:flash(enemy) > 0 then fill = { 0.85, 0.85, 0.78 } end
             local active = Debuffs.active(enemy)
-            UI.rect(x - 150, y - 88, 300, 190, fill, active[1] and active[1].definition.color or palette.paper)
+            UI.rect(x - 150, y - 88, 300, 190, fill, chosen and palette.green or (active[1] and active[1].definition.color or palette.paper))
             UI.label(enemy.name:upper(), x - 132, y - 62, 264, "center",
                 app.feedback:flash(enemy) > 0 and palette.ink or palette.white, "heading")
             UI.color(palette.paper, 0.35)
@@ -86,7 +95,15 @@ function Combat.draw(game, app)
     UI.button("endturn", game.combat.phase == "enemy" and "ENEMIES..." or "END TURN",
         1632, 624, 264, 76, game.combat.phase == "player", palette.red)
     if game.combat.phase == "player" then
-        UI.label(app.combatController.selected and "Choose a target or select the card again" or "Select a card  •  Hold to inspect",
+        local controller = app.combatController
+        local required = controller.selected and game:targetRequirement(controller.selected)
+        if required then
+            UI.label("Choose " .. required .. " enemies: " .. #controller.targetIndices .. " / " .. required,
+                1590, 464, 306, "center", palette.gold, "small")
+            UI.button("confirmTargets", "CONFIRM TARGETS", 1590, 492, 306, 76,
+                #controller.targetIndices == required, palette.green)
+        end
+        UI.label(controller.selected and (required and "Click a green enemy to deselect it" or "Choose a target or select the card again") or "Select a card  •  Hold to inspect",
             530, 705, 860, "center", palette.muted, "small")
     end
     if game.combat.phase == "mulligan" then drawMulligan(game) end

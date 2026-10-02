@@ -8,7 +8,7 @@ type AddIssue = (path: string, message: string) => void;
 type Locals = Map<string, ValueType>;
 
 /** Validate untrusted effect trees and check references before execution. */
-export function validateEffects(effects: unknown, path: string, card: Pick<CardDefinition, "target">, cardIds: Set<string>, add: AddIssue, locals: Locals = new Map(), depth = 0): Locals {
+export function validateEffects(effects: unknown, path: string, card: Pick<CardDefinition, "target">, cardIds: Set<string>, add: AddIssue, locals: Locals = new Map(), depth = 0, chosenTargetCounts: number[] = []): Locals {
   // Bound nesting before traversing imported JSON.
   if (!Array.isArray(effects)) { add(path, "Effects must be an array."); return locals; }
   if (depth > 3) { add(path, "Conditional nesting exceeds 3."); return locals; }
@@ -70,8 +70,8 @@ export function validateEffects(effects: unknown, path: string, card: Pick<CardD
     if (effect.scalable !== undefined && typeof effect.scalable !== "boolean") add(at, "Spell-power scaling must be a boolean.");
     if (effect.op === "if") {
       expect(effect.condition, `${at}.condition`, "boolean");
-      const yes = validateEffects(effect.then, `${at}.then`, card, cardIds, add, new Map(locals), depth + 1);
-      const no = validateEffects(effect.else ?? [], `${at}.else`, card, cardIds, add, new Map(locals), depth + 1);
+      const yes = validateEffects(effect.then, `${at}.then`, card, cardIds, add, new Map(locals), depth + 1, chosenTargetCounts);
+      const no = validateEffects(effect.else ?? [], `${at}.else`, card, cardIds, add, new Map(locals), depth + 1, chosenTargetCounts);
       // Only definitely assigned values may escape a conditional.
       locals.clear();
       yes.forEach((type, name) => { if (no.get(name) === type) locals.set(name, type); });
@@ -112,11 +112,14 @@ export function validateEffects(effects: unknown, path: string, card: Pick<CardD
         if (effect.op !== "damage") add(at, "Choosing multiple enemies is supported by damage effects.");
         if (card.target !== "multi") add(at, "Choosing multiple enemies requires a Multiple Enemies card target.");
         if (typeof effect.targetCount !== "number" || !Number.isSafeInteger(effect.targetCount) || effect.targetCount < 1) add(`${at}.targetCount`, "Choose a positive whole number of enemies.");
+        else chosenTargetCounts.push(effect.targetCount);
       } else if (!["selectedEnemy", "otherEnemies", "allEnemies"].includes(String(effect.target))) add(at, "Unsupported enemy target.");
       if (effect.target === "selectedEnemy" && card.target !== "enemy" && card.target !== "multi") add(at, "Selected enemy requires One Enemy or Multiple Enemies.");
       if (effect.target === "otherEnemies" && card.target !== "multi") add(at, "Other enemies requires Multiple Enemies.");
       if (effect.target === "allEnemies" && card.target !== "all" && card.target !== "multi") add(at, "All enemies requires All Enemies or Multiple Enemies.");
     }
   });
+  // One confirmation selection must satisfy every conditional damage branch.
+  if (depth === 0 && chosenTargetCounts.some((count) => count !== chosenTargetCounts[0])) add(path, "All chosen-enemy damage effects on a card must use the same enemy count.");
   return locals;
 }

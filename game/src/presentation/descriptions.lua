@@ -40,7 +40,8 @@ local function describeGenerated(definition, query, cardId, multiplier, instance
             local value = describeExpression(effect.amount, context)
             if effect.scalable and context then value = tostring(tonumber(value) * context.multiplier) end
             local target = effect.target == "allEnemies" and " to all enemies"
-                or effect.target == "otherEnemies" and " to all other enemies" or " to the target"
+                or effect.target == "otherEnemies" and " to all other enemies"
+                or effect.target == "selectedEnemies" and (" to " .. tostring(effect.targetCount) .. " chosen enemies") or " to the target"
             phrases[#phrases + 1] = "Deal " .. value .. " damage" .. target .. "."
         elseif effect.op == "debuff" then
             local value = context and amount(effect, context, "stacks") or describeExpression(effect.stacks)
