@@ -1,6 +1,6 @@
 local Debuffs = require("src.domain.debuffs.registry")
 local Validation = {}
-local ops = { damage = true, debuff = true, freeze = true, armor = true, heal = true, draw = true,
+local ops = { damage = true, damageBonus = true, debuff = true, freeze = true, armor = true, heal = true, draw = true,
     mana = true, addStatus = true, incrementCounter = true, subtractCounter = true, setCounter = true,
     resetCounter = true, setLocal = true, ["if"] = true }
 
@@ -122,6 +122,14 @@ function Validation.effects(effects, path, errors, depth, cardTarget, cardIds, l
                 local kind = expression(effect.value, at .. ".value")
                 if type(effect.name) ~= "string" or not effect.name:match("^[a-zA-Z_][a-zA-Z0-9_]*$") then add(at, "invalid calculated-value name")
                 else locals[effect.name] = kind end
+            elseif op == "damageBonus" then
+                expect(effect.amount, at .. ".amount", "number")
+                if effect.scope ~= "turn" and effect.scope ~= "combat" then add(at .. ".scope", "choose turn or combat duration") end
+                local elements = { this = true, fire = true, ice = true, nature = true, earth = true, arcane = true }
+                local categories = { this = true, DMG = true, DEF = true, HEAL = true, UTIL = true }
+                if effect.element ~= nil and not elements[effect.element] then add(at .. ".element", "choose a valid element") end
+                if effect.category ~= nil and not categories[effect.category] then add(at .. ".category", "choose a valid category") end
+                if effect.element == nil and effect.category == nil then add(at, "choose an element or category to receive the bonus") end
             elseif op == "incrementCounter" or op == "subtractCounter" or op == "setCounter" or op == "resetCounter" then
                 counter(effect, at)
                 if op ~= "resetCounter" then

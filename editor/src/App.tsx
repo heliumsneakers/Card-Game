@@ -125,12 +125,31 @@ export default function App() {
     else setSelection({ kind: "card", id: "" });
     setStatus(`Deleted ${selectedCard.name || selectedCard.id}`);
   };
-  // Download only drafts that pass content and effect validation.
+  // Download the current draft even when validation reports unfinished work.
   const exportJson = () => {
-    if (issues.length) { setStatus("Fix validation issues before exporting"); return; }
-    // Revoke the temporary download URL immediately after dispatch.
-    const url = URL.createObjectURL(new Blob([deterministicJson(content)], { type: "application/json" }));
-    const anchor = document.createElement("a"); anchor.href = url; anchor.download = "content.json"; anchor.click(); URL.revokeObjectURL(url); setStatus("Exported content.json");
+    // Export unfinished drafts too, so validation errors never prevent a backup.
+    let url: string | undefined;
+    const anchor = document.createElement("a");
+    try {
+      url = URL.createObjectURL(new Blob([deterministicJson(content)], { type: "application/json" }));
+      anchor.href = url;
+      anchor.download = "content.json";
+      anchor.hidden = true;
+      document.body.appendChild(anchor);
+      anchor.click();
+      setStatus(issues.length
+        ? `Draft download requested — ${issues.length} validation issue${issues.length === 1 ? "" : "s"} still need attention`
+        : "Download requested: content.json");
+    } catch (error) {
+      setStatus(`Export failed: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      anchor.remove();
+      // Give the browser time to consume the Blob before releasing its URL.
+      if (url) {
+        const downloadUrl = url;
+        window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 60_000);
+      }
+    }
   };
   // Migrate and validate imported JSON before replacing the draft.
   const importJson = async (file?: File) => {

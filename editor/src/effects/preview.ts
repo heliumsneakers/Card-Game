@@ -1,11 +1,13 @@
 import { resolveCounterId, type CounterCard } from "./counterReferences.ts";
 import { getDebuff, legacyFreezeId } from "./debuffs.ts";
+import { addDamageBonus, matchingDamageBonus, type DamageBonusState } from "./damageModifiers.ts";
 import type { CardDefinition, CounterReference, Effect, Expression } from "../model";
 
 export interface PreviewState {
   mana: number; maxMana: number; hp: number; maxHp: number; armor: number; turn: number;
   previousCardId: string; enemies: number[]; debuffs: Record<string, number>[]; debuffDamage: Record<string, number>[]; targetIndex: number;
   handSize: number; availableDraws: number; statuses: Record<string, number>; counters: Record<string, number>;
+  damageBonuses: DamageBonusState;
 }
 export interface TraceStep { path: string; operation: string; inputs: string[]; result: string }
 export interface PreviewResult { state: PreviewState; steps: TraceStep[]; values: Map<Effect, number>; bonusDamageValues: Map<Effect, number>; error?: string }
@@ -13,7 +15,7 @@ export interface PreviewResult { state: PreviewState; steps: TraceStep[]; values
 /** Build a fresh sandbox; numeric inputs represent the state when effects start. */
 export function initialPreviewState(): PreviewState {
   // The selected card has already left the hand and paid its mana cost.
-  return { mana: 2, maxMana: 3, hp: 20, maxHp: 30, armor: 0, turn: 1, previousCardId: "", enemies: [30, 30], debuffs: [{}, {}], debuffDamage: [{}, {}], targetIndex: 0, handSize: 3, availableDraws: 10, statuses: {}, counters: {} };
+  return { mana: 2, maxMana: 3, hp: 20, maxHp: 30, armor: 0, turn: 1, previousCardId: "", enemies: [30, 30], debuffs: [{}, {}], debuffDamage: [{}, {}], targetIndex: 0, handSize: 3, availableDraws: 10, statuses: {}, counters: {}, damageBonuses: { turn: {}, combat: {} } };
 }
 
 /** Resolve ownership and lifetime into an unambiguous sandbox key. */
@@ -28,7 +30,7 @@ export function nextPreviewTurn(state: PreviewState): PreviewState {
   // Mirror combat's turn transition: refill mana, retain previous-card history.
   const maxMana = Math.min(3, state.maxMana + 1);
   const canDraw = state.handSize < 7 && state.availableDraws > 0;
-  return { ...state, turn: state.turn + 1, maxMana, mana: maxMana, handSize: state.handSize + Number(canDraw), availableDraws: state.availableDraws - Number(canDraw), counters: Object.fromEntries(Object.entries(state.counters).filter(([key]) => key.startsWith("combat:"))) };
+  return { ...state, turn: state.turn + 1, maxMana, mana: maxMana, handSize: state.handSize + Number(canDraw), availableDraws: state.availableDraws - Number(canDraw), counters: Object.fromEntries(Object.entries(state.counters).filter(([key]) => key.startsWith("combat:"))), damageBonuses: { ...state.damageBonuses, turn: {} } };
 }
 
 /** Resolve an effect list against a detached state and return an ordered trace. */
@@ -36,6 +38,8 @@ export function previewEffects(card: Pick<CardDefinition, "id" | "effects"> & Pa
   const state: PreviewState = structuredClone(source);
   // Older hot-reloaded sandbox state may predate the potency map.
   state.debuffDamage ||= [];
+  // Old saved sandbox state may predate centralized card damage bonuses.
+  state.damageBonuses ||= { turn: {}, combat: {} };
   const steps: TraceStep[] = [];
   const values = new Map<Effect, number>();
   const bonusDamageValues = new Map<Effect, number>();
@@ -117,8 +121,14 @@ export function previewEffects(card: Pick<CardDefinition, "id" | "effects"> & Pa
         const value = effect.op === "resetCounter" ? 0 : amount(effect.amount ?? 1);
         state.counters[key] = effect.op === "incrementCounter" ? before + value : effect.op === "subtractCounter" ? Math.max(0, before - value) : value;
         result = `${key}: ${before} → ${state.counters[key]}`;
+      } else if (effect.op === "damageBonus") {
+        const value = amount(effect.amount, effect.scalable);
+        const key = addDamageBonus(state, effect, card, value);
+        result = `${effect.element || "any element"} / ${effect.category || "any category"} bonus: ${state.damageBonuses[effect.scope][key].amount}`;
       } else {
-        const value = effect.op === "freeze" ? 1 : amount(effect.op === "debuff" || effect.op === "addStatus" ? effect.stacks : effect.amount, "scalable" in effect && effect.scalable);
+        const baseValue = effect.op === "freeze" ? 1 : amount(effect.op === "debuff" || effect.op === "addStatus" ? effect.stacks : effect.amount, "scalable" in effect && effect.scalable);
+        const value = effect.op === "damage" ? baseValue + matchingDamageBonus(state, card) : baseValue;
+        if (effect.op === "damage" && value > baseValue) inputs.push(`matching damage bonuses +${value - baseValue}`);
         values.set(effect, value);
         // Capture potency now; later spell-power changes cannot alter active debuffs.
         const bonusDamage = effect.op === "debuff" && effect.bonusDamage ? amount(effect.bonusDamage, effect.damageScalable) : 0;

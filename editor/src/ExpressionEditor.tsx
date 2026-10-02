@@ -47,13 +47,14 @@ export function ExpressionEditor({ value, onChange, label = "Value", condition =
     </select>}
     {(value.kind === "binary" || value.kind === "compare") && <div className="formula-row">
       <ExpressionEditor value={value.left} onChange={(left) => onChange({ ...value, left } as Expression)} label="Left" />
-      <select aria-label="Formula operator" value={value.operator} onChange={(event) => onChange({ ...value, operator: event.target.value } as Expression)}>
+      {/* A visible label keeps the operator understandable when operands stack. */}
+      <label className="formula-operator"><span>Operator</span><select aria-label="Formula operator" value={value.operator} onChange={(event) => onChange({ ...value, operator: event.target.value } as Expression)}>
         {value.kind === "binary" ? <>
           <option value="add">+</option><option value="subtract">−</option><option value="multiply">×</option><option value="min">minimum</option><option value="max">maximum</option>
         </> : <>
           <option value="eq">is</option><option value="ne">is not</option><option value="lt">is less than</option><option value="lte">is at most</option><option value="gt">is greater than</option><option value="gte">is at least</option>
         </>}
-      </select>
+      </select></label>
       <ExpressionEditor value={value.right} onChange={(right) => onChange({ ...value, right } as Expression)} label="Right" />
     </div>}
   </div>;

@@ -1,4 +1,5 @@
 local Debuffs = require("src.domain.debuffs.registry")
+local DamageModifiers = require("src.domain.damage_modifiers")
 local Deck = require("src.domain.deck")
 local Resolver = require("src.domain.effects.resolver")
 local Combat = {}
@@ -42,6 +43,8 @@ function Combat.new()
     state.wave, state.turn = 1, 1
     state.maxMana, state.mana = 1, 1
     state.statuses, state.turnCounters, state.combatCounters = {}, {}, {}
+    -- Damage bonuses have independent turn and encounter lifetimes.
+    state.turnDamageBonuses, state.combatDamageBonuses = {}, {}
     state.previousCardId = nil
     return state
 end
@@ -66,12 +69,14 @@ function Combat.queries(state, player, piles, targetIndex, previewCost)
                 if card.instanceId == instanceId then table.remove(deck.hand, index); break end
             end
             Resolver.resolve(definition, cardId, Combat.queries(shadow, person),
-                effectActions(shadow, deck, person, function(limit) return limit end, nil, targetIndex or 1), multiplier, instanceId,
+                effectActions(shadow, deck, person, function(limit) return limit end, nil, targetIndex or 1, definition), multiplier, instanceId,
                 function(effect, context)
                     -- Bind values to blocks so both branch numbering and ordering remain stable.
                     if effect.op == "debuff" and effect.bonusDamage then bonusValues[effect] = Expressions.debuffDamage(effect, context) end
                     if effect.op == "debuff" or effect.op == "addStatus" then values[effect] = Expressions.amount(effect, context, "stacks")
-                    elseif effect.op == "damage" or effect.op == "armor" or effect.op == "heal" or effect.op == "draw" or effect.op == "mana" then values[effect] = Expressions.amount(effect, context) end
+                    elseif effect.op == "damageBonus" then values[effect] = Expressions.amount(effect, context)
+                    elseif effect.op == "damage" then values[effect] = Expressions.amount(effect, context) + DamageModifiers.amount(shadow, definition)
+                    elseif effect.op == "armor" or effect.op == "heal" or effect.op == "draw" or effect.op == "mana" then values[effect] = Expressions.amount(effect, context) end
                 end)
             return values, bonusValues
         end,
@@ -109,13 +114,16 @@ local function eachTarget(state, target, targetIndex, callback)
 end
 
 -- Closures bind the chosen target and dependencies. Handlers cannot reach state.
-effectActions = function(state, piles, player, random, feedback, targetIndex)
+effectActions = function(state, piles, player, random, feedback, targetIndex, sourceCard)
     return {
         -- Bind target resolution and damage feedback behind one mutation operation.
         damage = function(target, amount)
-            -- Apply the same damage amount to each currently living target.
-            eachTarget(state, target, targetIndex, function(enemy) Combat.damageEnemy(state, enemy, amount, feedback) end)
+            -- Add matching passive bonuses once, then use the same total per target.
+            local modifiedAmount = amount + DamageModifiers.amount(state, sourceCard)
+            eachTarget(state, target, targetIndex, function(enemy) Combat.damageEnemy(state, enemy, modifiedAmount, feedback) end)
         end,
+        -- Store additive damage bonuses outside card-specific damage formulas.
+        damageBonus = function(effect, amount) DamageModifiers.add(state, sourceCard, effect, amount) end,
         -- Debuffs share target selection and retain their authoritative stack count.
         debuff = function(target, id, stacks, bonusDamage)
             eachTarget(state, target, targetIndex, function(enemy)
@@ -191,7 +199,7 @@ function Combat.resolveCard(state, piles, player, cards, random, feedback, card,
     local definition = cards:definition(card)
     -- Capture the multiplier now, while scalar queries remain live during execution.
     Resolver.resolve(definition, card.id, Combat.queries(state, player),
-        effectActions(state, piles, player, random, feedback, targetIndex), Combat.surgeMultiplier(state), card.instanceId)
+        effectActions(state, piles, player, random, feedback, targetIndex, definition), Combat.surgeMultiplier(state), card.instanceId)
     -- Only definitions that explicitly retain spell power leave its stacks available.
     local retainsSpellPower = false
     for _, id in ipairs(definition.retainsStatuses or {}) do
@@ -259,6 +267,8 @@ function Combat.advanceTurn(state, piles, random)
     state.maxMana = math.min(3, state.maxMana + 1)
     state.mana = state.maxMana
     state.turnCounters = {}
+    -- Turn bonuses expire with counters; combat bonuses survive this transition.
+    DamageModifiers.advanceTurn(state)
     Deck.draw(piles, random)
 end
 

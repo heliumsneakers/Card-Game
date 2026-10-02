@@ -28,6 +28,14 @@ local function describeGenerated(definition, query, cardId, multiplier, instance
     for _, effect in ipairs(definition.effects) do
         if effect.op == "setLocal" and context then
             context.locals[effect.name] = Expressions.evaluate(effect.value, context)
+        elseif effect.op == "damageBonus" then
+            local value = context and amount(effect, context) or describeExpression(effect.amount)
+            local element = effect.element == "this" and context and context.element or effect.element
+            local category = effect.category == "this" and context and context.category or effect.category
+            local group = element and category and (tostring(element) .. " " .. tostring(category))
+                or element and tostring(element) or category and tostring(category) or nil
+            local target = group and (group .. " cards") or "Matching cards"
+            phrases[#phrases + 1] = "Add " .. tostring(value) .. " damage to " .. target .. " this " .. effect.scope .. "."
         elseif effect.op == "damage" then
             local value = describeExpression(effect.amount, context)
             if effect.scalable and context then value = tostring(tonumber(value) * context.multiplier) end

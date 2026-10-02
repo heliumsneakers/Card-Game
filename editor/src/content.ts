@@ -126,6 +126,10 @@ function expressionText(expression: Expression): string {
 function effectText(effect: Effect): string {
   const targetText = (target: "selectedEnemy" | "otherEnemies" | "allEnemies") => target === "allEnemies" ? " to all enemies" : target === "otherEnemies" ? " to all other enemies" : " to the target";
   if (effect.op === "damage") return `Deal ${expressionText(effect.amount)} damage${targetText(effect.target)}.`;
+  if (effect.op === "damageBonus") {
+    const groups = [effect.element && `${effect.element === "this" ? "this card’s" : effect.element} element`, effect.category && `${effect.category === "this" ? "this card’s" : effect.category} category`].filter(Boolean).join(" and ");
+    return `Add ${expressionText(effect.amount)} damage to ${groups || "matching cards"} this ${effect.scope === "turn" ? "turn" : "combat"}.`;
+  }
   if (effect.op === "debuff") {
     const bonus = effect.bonusDamage ? ` With ${expressionText(effect.bonusDamage)} bonus damage per turn.` : "";
     return `Apply ${expressionText(effect.stacks)} ${getDebuff(effect.id).label}${targetText(effect.target)}.${bonus}`;
@@ -288,7 +292,7 @@ export function migrateDescriptions(content: ContentDocument): ContentDocument {
   };
 }
 
-/** Validate catalog metadata and typed effect trees before export or preview. */
+/** Report draft issues and validate catalog metadata before game preview. */
 export function validateContent(content: ContentDocument): Issue[] {
   const issues: Issue[] = [];
   const ids = new Set<string>();

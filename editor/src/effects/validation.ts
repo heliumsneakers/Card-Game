@@ -83,6 +83,14 @@ export function validateEffects(effects: unknown, path: string, card: Pick<CardD
       else locals.set(effect.name, type);
       return;
     }
+    if (effect.op === "damageBonus") {
+      expect(effect.amount, `${at}.amount`, "number");
+      if (effect.scope !== "turn" && effect.scope !== "combat") add(`${at}.scope`, "Choose turn or combat duration.");
+      if (effect.element !== undefined && effect.element !== "this" && !["fire", "ice", "nature", "earth", "arcane"].includes(String(effect.element))) add(`${at}.element`, "Choose a valid element.");
+      if (effect.category !== undefined && effect.category !== "this" && !["DMG", "DEF", "HEAL", "UTIL"].includes(String(effect.category))) add(`${at}.category`, "Choose a valid category.");
+      if (effect.element === undefined && effect.category === undefined) add(at, "Choose an element or category to receive the bonus.");
+      return;
+    }
     if (["incrementCounter", "subtractCounter", "setCounter", "resetCounter"].includes(String(effect.op))) {
       counter(effect, at);
       if (effect.op !== "resetCounter") {

@@ -7,6 +7,7 @@ const number = (value: number): Expression => ({ kind: "literal", value });
 // Each factory creates fresh state, including nested expressions and branches.
 export const effectDefaults: Record<Effect["op"], () => Effect> = {
   damage: () => ({ op: "damage", target: "selectedEnemy", amount: number(2), scalable: true }),
+  damageBonus: () => ({ op: "damageBonus", element: "this", amount: number(1), scalable: false, scope: "turn" }),
   debuff: () => {
     // The catalog owns each debuff’s initial amount and scaling preference.
     const definition = getDebuff(defaultDebuffId);

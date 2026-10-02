@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import type { Effect } from "../model";
 import { effectDefaults } from "./defaults";
-import { AmountFields, ConditionalFields, CounterFields, FreezeFields, LocalFields, StackFields, type FieldProps } from "./fields";
+import { AmountFields, ConditionalFields, CounterFields, DamageBonusFields, FreezeFields, LocalFields, StackFields, type FieldProps } from "./fields";
 
 type EffectModule = { label: string; fields: ComponentType<FieldProps>; group: "Effects" | "Counters" | "Logic"; create: () => Effect; hidden?: boolean };
 
@@ -13,6 +13,7 @@ function block(op: Effect["op"], label: string, fields: ComponentType<FieldProps
 
 export const effectRegistry: Record<Effect["op"], EffectModule> = {
   damage: block("damage", "Damage", AmountFields),
+  damageBonus: block("damageBonus", "Damage Bonus", DamageBonusFields),
   debuff: block("debuff", "Debuffs", StackFields),
   freeze: block("freeze", "Legacy Freeze", FreezeFields, "Effects", true),
   armor: block("armor", "Gain Armor", AmountFields),

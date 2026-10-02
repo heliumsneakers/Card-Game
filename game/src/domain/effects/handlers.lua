@@ -10,6 +10,11 @@ function Handlers.damage(effect, context)
     context.actions.damage(effect.target, amount(effect, context))
 end
 
+-- Add an evaluated bonus to the selected damage group and duration.
+function Handlers.damageBonus(effect, context)
+    context.actions.damageBonus(effect, amount(effect, context))
+end
+
 -- Ask combat to freeze the living targets selected by the effect.
 function Handlers.freeze(effect, context)
     context.actions.debuff(effect.target, Debuffs.legacyOperations.freeze, 1)

@@ -1,7 +1,7 @@
 import type { CardDefinition, CounterOwner, CounterReference, ExplicitCounterReference } from "../model";
 
 // These lists keep owner controls and validation on the same vocabulary.
-export const counterElements = ["fire", "ice", "nature", "earth", "arcane"] as const;
+export const counterElements = ["fire", "ice"] as const;
 export const counterCategories = ["DMG", "DEF", "HEAL", "UTIL"] as const;
 export type CounterCard = Pick<CardDefinition, "id"> & Partial<Pick<CardDefinition, "element" | "type">>;
 

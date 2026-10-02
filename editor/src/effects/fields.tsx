@@ -2,7 +2,7 @@ import { replaceCounterReference } from "./counterReferences";
 import { debuffRegistry } from "./debuffs";
 import { EffectEditor } from "../EffectEditor";
 import { ExpressionEditor } from "../ExpressionEditor";
-import { literal, type Effect, type EffectTarget } from "../model";
+import { literal, type CardElement, type CardType, type Effect, type EffectTarget } from "../model";
 import { CounterField } from "./CounterField";
 
 export interface FieldProps { effect: Effect; onChange: (effect: Effect) => void }
@@ -29,6 +29,26 @@ export function AmountFields({ effect, onChange }: FieldProps) {
     <ExpressionEditor value={effect.amount} onChange={(amount) => onChange({ ...effect, amount } as Effect)} label="Amount" />
     {effect.op === "mana" && <label><span>Mana cap</span><input type="number" min="0" value={effect.cap} onChange={(event) => onChange({ ...effect, cap: Number(event.target.value) })} /></label>}
     <ScalingField effect={effect} onChange={onChange} />
+  </>;
+}
+
+/** Configure one cumulative bonus that the combat system applies to matching damage. */
+export function DamageBonusFields({ effect, onChange }: FieldProps) {
+  if (effect.op !== "damageBonus") return null;
+  // “This” captures the card's current field; omitting a selector means every value.
+  return <>
+    <label><span>Element</span><select value={effect.element || "any"} onChange={(event) => {
+      const { element: _element, ...rest } = effect;
+      onChange(event.target.value === "any" ? rest : { ...effect, element: event.target.value as CardElement | "this" });
+    }}><option value="any">Any element</option><option value="this">This card’s element</option><option value="fire">Fire</option><option value="ice">Ice</option><option value="nature">Nature</option><option value="earth">Earth</option><option value="arcane">Arcane</option></select></label>
+    <label><span>Category</span><select value={effect.category || "any"} onChange={(event) => {
+      const { category: _category, ...rest } = effect;
+      onChange(event.target.value === "any" ? rest : { ...effect, category: event.target.value as CardType | "this" });
+    }}><option value="any">Any category</option><option value="this">This card’s category</option><option value="DMG">Damage</option><option value="DEF">Defense</option><option value="HEAL">Healing</option><option value="UTIL">Utility</option></select></label>
+    <ExpressionEditor value={effect.amount} onChange={(amount) => onChange({ ...effect, amount })} label="Bonus to add" />
+    <ScalingField effect={effect} onChange={onChange} />
+    <label><span>Duration</span><select value={effect.scope} onChange={(event) => onChange({ ...effect, scope: event.target.value as "turn" | "combat" })}><option value="turn">This turn</option><option value="combat">This combat</option></select></label>
+    <small>Matching bonuses add together automatically. Play this again to increase the bonus.</small>
   </>;
 }
 
