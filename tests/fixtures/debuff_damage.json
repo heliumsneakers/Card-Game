@@ -1,0 +1,27 @@
+[
+  {
+    "name": "Burn preserves its base tick without a bonus",
+    "effect": { "op": "debuff", "id": "debuff.burn", "target": "selectedEnemy", "stacks": { "kind": "literal", "value": 2 } },
+    "spellPower": 0, "expectedStacks": 2, "expectedBonus": 0, "enemyHp": [19, 18], "playerHp": [27, 24]
+  },
+  {
+    "name": "Burn adds captured damage to its base tick",
+    "effect": { "op": "debuff", "id": "debuff.burn", "target": "selectedEnemy", "stacks": { "kind": "literal", "value": 2 }, "bonusDamage": { "kind": "literal", "value": 3 } },
+    "spellPower": 0, "expectedStacks": 2, "expectedBonus": 3, "enemyHp": [16, 12], "playerHp": [27, 24]
+  },
+  {
+    "name": "Freeze deals optional damage while skipping attacks",
+    "effect": { "op": "debuff", "id": "debuff.freeze", "target": "selectedEnemy", "stacks": { "kind": "literal", "value": 2 }, "bonusDamage": { "kind": "literal", "value": 2 } },
+    "spellPower": 0, "expectedStacks": 2, "expectedBonus": 2, "enemyHp": [18, 16], "playerHp": [30, 30]
+  },
+  {
+    "name": "Damage scaling leaves duration unchanged",
+    "effect": { "op": "debuff", "id": "debuff.burn", "target": "selectedEnemy", "stacks": { "kind": "literal", "value": 2 }, "scalable": false, "bonusDamage": { "kind": "context", "path": "mana" }, "damageScalable": true },
+    "spellPower": 2, "expectedStacks": 2, "expectedBonus": 8, "enemyHp": [11, 2], "playerHp": [27, 24]
+  },
+  {
+    "name": "Duration scaling leaves bonus damage unchanged",
+    "effect": { "op": "debuff", "id": "debuff.freeze", "target": "selectedEnemy", "stacks": { "kind": "literal", "value": 1 }, "scalable": true, "bonusDamage": { "kind": "literal", "value": 2 }, "damageScalable": false },
+    "spellPower": 1, "expectedStacks": 2, "expectedBonus": 2, "enemyHp": [18, 16], "playerHp": [30, 30]
+  }
+]

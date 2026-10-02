@@ -40,7 +40,7 @@ local function describeGenerated(definition, query, cardId, multiplier, instance
             phrases[#phrases + 1] = "Apply " .. value .. " " .. Debuffs.get(effect.id).label .. " to " .. target .. "."
             if effect.bonusDamage then
                 local bonus = context and Expressions.debuffDamage(effect, context) or describeExpression(effect.bonusDamage)
-                phrases[#phrases + 1] = "With " .. tostring(bonus) .. " bonus damage per enemy action."
+                phrases[#phrases + 1] = "With " .. tostring(bonus) .. " bonus damage per turn."
             end
         elseif effect.op == "freeze" then phrases[#phrases + 1] = effect.target == "allEnemies" and "Freeze them." or "Freeze the target."
         elseif effect.op == "armor" then phrases[#phrases + 1] = "Gain " .. tostring(context and amount(effect, context) or describeExpression(effect.amount)) .. " Armor."

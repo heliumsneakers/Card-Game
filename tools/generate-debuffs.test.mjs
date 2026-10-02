@@ -15,6 +15,7 @@ test("metadata rejects ambiguous tokens, invalid defaults, and duplicate IDs", (
     (value) => value.definitions.push(structuredClone(value.definitions[0])),
     (value) => { value.definitions[0].token = "dmg"; },
     (value) => { value.definitions[0].token = "freeze2"; },
+    (value) => { value.definitions[0].token = "freeze_damage"; },
     (value) => { value.definitions[0].defaultStacks = -1; },
     (value) => { value.definitions[0].color = [2, 0, 0]; },
     (value) => { value.defaultId = "debuff.missing"; },
@@ -28,12 +29,12 @@ test("metadata rejects ambiguous tokens, invalid defaults, and duplicate IDs", (
   }
 });
 
-test("a second debuff can reuse an existing behavior through metadata alone", () => {
+test("a new debuff can reuse an existing behavior through metadata alone", () => {
   const candidate = structuredClone(catalog);
   const fixture = { ...candidate.definitions[0], id: "debuff.stun", token: "stun", label: "Stun" };
   delete fixture.legacyFlag;
   candidate.definitions.push(fixture);
-  assert.equal(validateDebuffCatalog(candidate).definitions.length, 2);
+  assert.equal(validateDebuffCatalog(candidate).definitions.length, catalog.definitions.length + 1);
   fixture.token = candidate.definitions[0].token;
   assert.throws(() => validateDebuffCatalog(candidate), /Duplicate debuff token/);
 });

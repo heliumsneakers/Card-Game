@@ -235,6 +235,8 @@ function Combat.endTurn(state)
     if state.phase ~= "player" then return end
     Combat.setPhase(state, "enemy")
     state.enemyIndex = 1
+    -- Queue one global tick before the paced enemy actions begin.
+    state.debuffTurnPending = true
     state.enemyTimer = 0.35
 end
 
@@ -269,6 +271,19 @@ end
 -- Resolve at most one enemy action when its delay expires.
 function Combat.update(state, piles, player, dt, random, feedback)
     if state.phase ~= "enemy" then return end
+    if state.debuffTurnPending then
+        -- Clear first so later updates or repeated actions cannot tick twice.
+        state.debuffTurnPending = false
+        for _, enemy in ipairs(state.enemies) do
+            if enemy.alive then
+                Debuffs.tickTurn(enemy, {
+                    damage = function(amount) Combat.damageEnemy(state, enemy, amount, feedback) end,
+                })
+            end
+        end
+        -- Let the game handle rewards or boss transitions without advancing the turn.
+        if Combat.livingEnemies(state) == 0 then return end
+    end
     state.enemyTimer = state.enemyTimer - dt
     if state.enemyTimer > 0 then return end
 

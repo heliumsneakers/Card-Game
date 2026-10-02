@@ -33,6 +33,8 @@ export function nextPreviewTurn(state: PreviewState): PreviewState {
 /** Resolve an effect list against a detached state and return an ordered trace. */
 export function previewEffects(card: Pick<CardDefinition, "id" | "effects">, source: PreviewState, instanceId = "1"): PreviewResult {
   const state: PreviewState = structuredClone(source);
+  // Older hot-reloaded sandbox state may predate the potency map.
+  state.debuffDamage ||= [];
   const steps: TraceStep[] = [];
   const values = new Map<Effect, number>();
   const bonusDamageValues = new Map<Effect, number>();
@@ -137,7 +139,7 @@ export function previewEffects(card: Pick<CardDefinition, "id" | "effects">, sou
               stacks[definition.id] = before + value;
               bonuses[definition.id] = Math.max(before > 0 ? bonuses[definition.id] || 0 : 0, bonusDamage);
             }
-            const suffix = bonuses[definition.id] ? `; +${bonuses[definition.id]} damage per enemy action` : "";
+            const suffix = bonuses[definition.id] ? `; +${bonuses[definition.id]} damage per turn` : "";
             return `Enemy ${i + 1} ${definition.label}: ${before} → ${stacks[definition.id] || 0} (${value})${suffix}`;
           }).join("; ") : `No living targets (${value})`;
         } else if (effect.op === "addStatus") {

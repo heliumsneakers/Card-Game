@@ -54,11 +54,11 @@ function DebuffDamageFields({ effect, onChange }: FieldProps) {
     <label className="check"><input type="checkbox" checked={effect.bonusDamage !== undefined} onChange={(event) => {
       const { bonusDamage: _damage, damageScalable: _scaling, ...base } = effect;
       onChange(event.target.checked ? { ...base, bonusDamage: literal(1), damageScalable: false } : base);
-    }} /> Add bonus damage each enemy action</label>
+    }} /> Add bonus damage each turn</label>
     {effect.bonusDamage !== undefined && <>
-      <ExpressionEditor value={effect.bonusDamage} onChange={(bonusDamage) => onChange({ ...effect, bonusDamage })} label="Bonus damage per enemy action" />
+      <ExpressionEditor value={effect.bonusDamage} onChange={(bonusDamage) => onChange({ ...effect, bonusDamage })} label="Bonus damage per turn" />
       <label className="check"><input type="checkbox" checked={effect.damageScalable ?? false} onChange={(event) => onChange({ ...effect, damageScalable: event.target.checked })} /> Bonus damage affected by spell power</label>
-      <small>Added to the debuff’s normal damage before each enemy action. Calculated when applied; reapplying keeps the higher bonus until the debuff expires.</small>
+      <small>Deals extra damage when you end your turn, before enemies attack. Calculated when applied; reapplying keeps the higher bonus until the debuff expires.</small>
     </>}
   </>;
 }

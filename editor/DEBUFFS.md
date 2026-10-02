@@ -7,8 +7,8 @@ Do not edit the generated Lua file.
 ## Reuse an existing mechanic
 
 1. Add an entry to `definitions` in the JSON catalog with a unique `id` and `token`.
-2. Choose an implemented `behavior`. Currently `skipAction` skips an enemy action
-   and consumes one stack per action.
+2. Choose an implemented `behavior`. `skipAction` skips an enemy action; `burn` deals one damage before it.
+   Both consume one stack per action.
 3. Run `npm run debuffs:generate` from the repository root.
 4. Run `npm run test:editor`, `make test`, and `npm run build:editor`.
 
@@ -79,3 +79,31 @@ initialization rejects an entry whose behavior function does not exist.
 
 The shared test fixture `tests/fixtures/debuff_registry.json` exercises a second,
 test-only debuff across TypeScript and Lua. It does not add a gameplay debuff.
+
+## Optional bonus damage on a card
+
+In a card's Debuffs block, enable **Add bonus damage each turn**. Set the
+**Bonus damage per turn** formula and, optionally, enable its own
+spell-power scaling. Duration/stacks retain their separate scaling control.
+
+The optional fields are `bonusDamage` (an expression) and `damageScalable` (a
+boolean). Missing fields mean zero bonus and preserve existing cards. The formula
+is evaluated when the debuff is applied; the resulting amount is stored on the
+affected enemy and does not change with later resources or spell power.
+
+The registry applies the bonus to every affected enemy once when you end your
+turn, before any enemy attacks. Normal behaviors still run before enemy actions. Burn with bonus 2 deals 3 total; Freeze with bonus 2 deals 2
+and still skips the attack. No immediate damage occurs on application. A lethal
+bonus prevents the behavior and attack and can finish the encounter.
+
+Reapplication adds duration/stacks and keeps the higher active bonus. Zero-stack
+applications do not change potency. Expiration clears the bonus, so a later
+application starts fresh. Different debuffs keep independent bonuses.
+
+The rules-text palette supplies tokens such as `{burn_damage=2}` and
+`{freeze_damage=2}`; numeric suffixes select later damage-bearing blocks. The
+`_damage` token suffix is reserved for these values. The execution preview shows
+captured bonus damage; the embedded game runs the recurring ticks.
+
+Future behavior handlers do not need to read or apply this bonus themselves;
+the registry does that independently of their normal behavior.

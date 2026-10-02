@@ -52,6 +52,15 @@ function Registry.active(enemy)
     return result
 end
 
+-- Apply recurring bonuses at the turn boundary independently of enemy actions.
+function Registry.tickTurn(enemy, context)
+    for _, entry in ipairs(Registry.active(enemy)) do
+        -- Stop once a bonus kills the target; dead enemies receive no further ticks.
+        if not enemy.alive then break end
+        if entry.bonusDamage > 0 then context.damage(entry.bonusDamage) end
+    end
+end
+
 -- Run each active behavior once before an enemy attack, without short-circuiting skips.
 function Registry.beforeAction(enemy, context)
     local skip = false
@@ -59,11 +68,6 @@ function Registry.beforeAction(enemy, context)
         -- A previous hook may kill the enemy; later hooks must not revive its action.
         if not enemy.alive then break end
         local definition = entry.definition
-        -- One recurring bonus per debuff ID, even when its normal behavior skips attacks.
-        if entry.bonusDamage > 0 then
-            context.damage(entry.bonusDamage)
-            if not enemy.alive then break end
-        end
         local skipped = Behaviors[definition.behavior](definition, entry.stacks, {
             name = enemy.name,
             notice = context.notice,

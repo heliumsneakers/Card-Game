@@ -126,7 +126,7 @@ function effectText(effect: Effect): string {
   const targetText = (target: "selectedEnemy" | "otherEnemies" | "allEnemies") => target === "allEnemies" ? " to all enemies" : target === "otherEnemies" ? " to all other enemies" : " to the target";
   if (effect.op === "damage") return `Deal ${expressionText(effect.amount)} damage${targetText(effect.target)}.`;
   if (effect.op === "debuff") {
-    const bonus = effect.bonusDamage ? ` With ${expressionText(effect.bonusDamage)} bonus damage per enemy action.` : "";
+    const bonus = effect.bonusDamage ? ` With ${expressionText(effect.bonusDamage)} bonus damage per turn.` : "";
     return `Apply ${expressionText(effect.stacks)} ${getDebuff(effect.id).label}${targetText(effect.target)}.${bonus}`;
   }
   if (effect.op === "freeze") return effect.target === "allEnemies" ? "Freeze them." : "Freeze the target.";
@@ -232,7 +232,7 @@ function migratedDescription(card: CardDefinition): string {
     if (effect.op === "damage") return `Deal ${token("dmg", effect.amount)} damage to ${target}.`;
     if (effect.op === "debuff") {
       const definition = getDebuff(effect.id);
-      const bonus = effect.bonusDamage ? ` With ${token(`${definition.token}_damage`, effect.bonusDamage)} bonus damage per enemy action.` : "";
+      const bonus = effect.bonusDamage ? ` With ${token(`${definition.token}_damage`, effect.bonusDamage)} bonus damage per turn.` : "";
       return `Apply ${token(definition.token, effect.stacks)} ${definition.label} to ${target}.${bonus}`;
     }
     if (effect.op === "freeze") return effect.target === "allEnemies" ? "Freeze them." : "Freeze the target.";

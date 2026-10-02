@@ -34,6 +34,7 @@ test: tools
 	luajit tests/test_effects.lua
 	luajit tests/test_effect_contract.lua
 	luajit tests/test_debuffs.lua
+	luajit tests/test_debuff_damage.lua
 	luajit tests/test_progression.lua
 	luajit tests/test_contract.lua
 
@@ -42,6 +43,7 @@ test-contract:
 	node tools/generate-debuffs.mjs --check
 	luajit tests/test_effect_contract.lua
 	luajit tests/test_debuffs.lua
+	luajit tests/test_debuff_damage.lua
 	luajit tests/test_contract.lua
 	node --experimental-strip-types tests/test_contract.mts
 
