@@ -92,8 +92,8 @@ is evaluated when the debuff is applied; the resulting amount is stored on the
 affected enemy and does not change with later resources or spell power.
 
 The registry applies the bonus to every affected enemy once when you end your
-turn, before any enemy attacks. Normal behaviors still run before enemy actions. Burn with bonus 2 deals 3 total; Freeze with bonus 2 deals 2
-and still skips the attack. No immediate damage occurs on application. A lethal
+turn, before any enemy attacks. Normal behaviors still run before enemy actions.
+Burn with bonus 2 deals 3 total; Freeze with bonus 2 deals 2 and still skips the attack. No immediate damage occurs on application. A lethal
 bonus prevents the behavior and attack and can finish the encounter.
 
 Reapplication adds duration/stacks and keeps the higher active bonus. Zero-stack

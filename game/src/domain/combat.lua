@@ -268,7 +268,7 @@ function Combat.finishEnemyPhase(state, piles, random)
     Combat.setPhase(state, "player")
 end
 
--- Resolve at most one enemy action when its delay expires.
+-- Tick turn bonuses once, then resolve at most one paced enemy action.
 function Combat.update(state, piles, player, dt, random, feedback)
     if state.phase ~= "enemy" then return end
     if state.debuffTurnPending then
