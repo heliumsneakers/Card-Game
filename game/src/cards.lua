@@ -5,7 +5,7 @@ Cards.__index = Cards
 -- Index this catalog's starter quantities and shop availability without reading files.
 function Cards.new(catalog)
     local self = setmetatable({ catalog = assert(catalog, "catalog is required"),
-        definitions = catalog.cards, startingDeck = {}, shopPool = {} }, Cards)
+        nextInstanceId = 0, definitions = catalog.cards, startingDeck = {}, shopPool = {} }, Cards)
     -- Derive availability per instance so games with different catalogs remain isolated.
     for _, definition in ipairs(catalog.document.cards) do
         local availability = definition.availability or {}
@@ -23,8 +23,10 @@ function Cards:make(name, cost, isCopy)
     -- Support existing name-based callers while storing the stable definition ID.
     local id = type(name) == "table" and name.id or (catalog.cards[name] and name or catalog.cardNames[name])
     local definition = assert(catalog.cards[id], "unknown card: " .. tostring(name))
+    -- Copies receive a fresh identity; recycling preserves the existing instance.
+    self.nextInstanceId = self.nextInstanceId + 1
     return {
-        id = id,
+        instanceId = self.nextInstanceId, id = id,
         name = definition.name,
         cost = cost == nil and definition.cost or cost,
         isCopy = isCopy or false,

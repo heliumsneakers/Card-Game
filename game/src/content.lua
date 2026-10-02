@@ -1,3 +1,4 @@
+local EffectValidation = require("src.domain.effects.validation")
 local Json = require("src.json")
 
 local Content = { schemaVersion = 1 }
@@ -21,15 +22,8 @@ local function integer(value, minimum)
 end
 
 local validTargets = { enemy = true, multi = true, all = true, self = true }
-local validEffectTargets = { selectedEnemy = true, otherEnemies = true, allEnemies = true }
-local validDebuffs = { ["debuff.freeze"] = true }
 local validTypes = { DMG = true, DEF = true, HEAL = true, UTIL = true }
 local validElements = { fire = true, ice = true, nature = true, earth = true, arcane = true }
-local validOps = {
-    damage = true, debuff = true, freeze = true, armor = true, heal = true, draw = true,
-    mana = true, addStatus = true, incrementCounter = true, setLocal = true, ["if"] = true,
-}
-
 -- Derive the name-based identifier required by the current content schema.
 local function contentId(kind, name)
     local slug = type(name) == "string" and name:lower():gsub("[^a-z0-9]+", "_"):gsub("^_+", ""):gsub("_+$", "") or ""
@@ -82,88 +76,6 @@ local function validateDescription(description, path, errors)
     if remainder:find("[{}]") then add(errors, path, "value blocks must look like {dmg=2}") end
 end
 
--- Validate expression shape and operators with a bounded recursion depth.
-local function validateExpression(expression, path, errors, depth)
-    depth = depth or 0
-    -- Bound recursion before descending through nested expression operands.
-    if depth > 12 then add(errors, path, "expression nesting exceeds 12"); return end
-    if type(expression) ~= "table" then add(errors, path, "must be an expression object"); return end
-    local kind = expression.kind
-    if kind == "literal" then
-        if not integer(expression.value, 0) then add(errors, path .. ".value", "must be a non-negative integer") end
-    elseif kind == "counter" then
-        if type(expression.id) ~= "string" or expression.id == "" then add(errors, path .. ".id", "counter id is required") end
-    elseif kind == "local" then
-        if type(expression.name) ~= "string" or expression.name == "" then add(errors, path .. ".name", "local name is required") end
-    elseif kind == "context" then
-        local allowed = { previousCardId = true, thisCardId = true, mana = true, hp = true, turn = true, livingEnemies = true }
-        if not allowed[expression.path] then add(errors, path .. ".path", "unsupported context value") end
-    elseif kind == "binary" then
-        local allowed = { add = true, subtract = true, multiply = true, min = true, max = true }
-        if not allowed[expression.operator] then add(errors, path .. ".operator", "unsupported arithmetic operator") end
-        validateExpression(expression.left, path .. ".left", errors, depth + 1)
-        validateExpression(expression.right, path .. ".right", errors, depth + 1)
-    elseif kind == "compare" then
-        local allowed = { eq = true, ne = true, lt = true, lte = true, gt = true, gte = true }
-        if not allowed[expression.operator] then add(errors, path .. ".operator", "unsupported comparison operator") end
-        validateExpression(expression.left, path .. ".left", errors, depth + 1)
-        validateExpression(expression.right, path .. ".right", errors, depth + 1)
-    else
-        add(errors, path .. ".kind", "unsupported expression kind")
-    end
-end
-
--- Validate an effect target against both the supported selectors and card targeting mode.
-local function validateEffectTarget(effect, path, errors, cardTarget)
-    if not validEffectTargets[effect.target] then add(errors, path .. ".target", "unsupported enemy target"); return end
-    if effect.target == "selectedEnemy" and cardTarget ~= "enemy" and cardTarget ~= "multi" then
-        add(errors, path .. ".target", "selected enemy requires enemy or multi card target")
-    end
-    if effect.target == "otherEnemies" and cardTarget ~= "multi" then
-        add(errors, path .. ".target", "other enemies requires multi card target")
-    end
-    if effect.target == "allEnemies" and cardTarget ~= "all" and cardTarget ~= "multi" then
-        add(errors, path .. ".target", "all enemies requires all or multi card target")
-    end
-end
-
--- Validate effect lists and nested branches, collecting path-specific errors.
-local function validateEffects(effects, path, errors, depth, cardTarget)
-    depth = depth or 0
-    if type(effects) ~= "table" then add(errors, path, "must be an array"); return end
-    if #effects > 64 then add(errors, path, "cannot contain more than 64 effects") end
-    if depth > 3 then add(errors, path, "conditional nesting exceeds 3"); return end
-    for index, effect in ipairs(effects) do
-        local effectPath = string.format("%s[%d]", path, index)
-        if type(effect) ~= "table" or not validOps[effect.op] then
-            add(errors, effectPath .. ".op", "unsupported effect operation")
-        elseif effect.op == "damage" then
-            validateExpression(effect.amount, effectPath .. ".amount", errors)
-            validateEffectTarget(effect, effectPath, errors, cardTarget)
-        elseif effect.op == "debuff" then
-            if not validDebuffs[effect.id] then add(errors, effectPath .. ".id", "unsupported debuff") end
-            validateExpression(effect.stacks, effectPath .. ".stacks", errors)
-            validateEffectTarget(effect, effectPath, errors, cardTarget)
-        elseif effect.op == "freeze" then
-            validateEffectTarget(effect, effectPath, errors, cardTarget)
-        elseif effect.op == "armor" or effect.op == "heal" or effect.op == "draw" or effect.op == "mana" then
-            validateExpression(effect.amount, effectPath .. ".amount", errors)
-        elseif effect.op == "addStatus" then
-            if type(effect.id) ~= "string" then add(errors, effectPath .. ".id", "status id is required") end
-            validateExpression(effect.stacks, effectPath .. ".stacks", errors)
-        elseif effect.op == "incrementCounter" then
-            if type(effect.id) ~= "string" then add(errors, effectPath .. ".id", "counter id is required") end
-        elseif effect.op == "setLocal" then
-            if type(effect.name) ~= "string" then add(errors, effectPath .. ".name", "local name is required") end
-            validateExpression(effect.value, effectPath .. ".value", errors)
-        elseif effect.op == "if" then
-            validateExpression(effect.condition, effectPath .. ".condition", errors)
-            validateEffects(effect["then"] or {}, effectPath .. ".then", errors, depth + 1, cardTarget)
-            validateEffects(effect["else"] or {}, effectPath .. ".else", errors, depth + 1, cardTarget)
-        end
-    end
-end
-
 -- Collect schema issues across cards, enemies, room curves, and endless settings.
 function Content.validate(document)
     local errors = {}
@@ -172,7 +84,9 @@ function Content.validate(document)
     if type(document.cards) ~= "table" then add(errors, "cards", "must be an array") end
     if type(document.enemies) ~= "table" then add(errors, "enemies", "must be an array") end
     -- One ID set detects collisions across both cards and enemies.
-    local ids = {}
+    local ids, cardIds = {}, {}
+    -- Resolve forward references using the complete card catalog.
+    for _, card in ipairs(document.cards or {}) do if type(card.id) == "string" then cardIds[card.id] = true end end
     for index, card in ipairs(document.cards or {}) do
         local path = string.format("cards[%d]", index)
         if type(card.id) ~= "string" or not card.id:match("^card%.[a-z0-9_]+$") then add(errors, path .. ".id", "invalid card id")
@@ -196,7 +110,7 @@ function Content.validate(document)
                 add(errors, path .. ".availability.copyLimit", "must be a positive integer")
             end
         end
-        validateEffects(card.effects, path .. ".effects", errors, nil, card.target)
+        EffectValidation.effects(card.effects, path .. ".effects", errors, nil, card.target, cardIds)
     end
     for index, enemy in ipairs(document.enemies or {}) do
         local path = string.format("enemies[%d]", index)

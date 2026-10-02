@@ -1,3 +1,4 @@
+local Debuffs = require("src.domain.debuffs.registry")
 local UI = require("src.ui.ui")
 local palette = require("src.ui.theme")
 local CardView = require("src.ui.card_view")
@@ -18,7 +19,8 @@ local function drawEnemies(game, app)
             local x, y = enemyPosition(i, #game.combat.enemies)
             local fill = enemy.isBoss and { 0.36, 0.13, 0.23 } or { 0.24, 0.28, 0.28 }
             if app.feedback:flash(enemy) > 0 then fill = { 0.85, 0.85, 0.78 } end
-            UI.rect(x - 150, y - 88, 300, 190, fill, enemy.frozen and { 0.35, 0.85, 1 } or palette.paper)
+            local active = Debuffs.active(enemy)
+            UI.rect(x - 150, y - 88, 300, 190, fill, active[1] and active[1].definition.color or palette.paper)
             UI.label(enemy.name:upper(), x - 132, y - 62, 264, "center",
                 app.feedback:flash(enemy) > 0 and palette.ink or palette.white, "heading")
             UI.color(palette.paper, 0.35)
@@ -27,9 +29,11 @@ local function drawEnemies(game, app)
             UI.label(enemy.tough .. " / " .. enemy.maxTough, x - 126, y + 42, 116, "center", palette.white, "label")
             UI.label("ATTACK", x + 10, y + 12, 116, "center", palette.muted, "tiny")
             UI.label(enemy.pow, x + 10, y + 42, 116, "center", palette.gold, "label")
-            if enemy.frozen then
-                local stacks = enemy.debuffs and enemy.debuffs["debuff.freeze"] or 1
-                UI.label("FROZEN x" .. stacks, x - 132, y + 112, 264, "center", { 0.35, 0.85, 1 }, "small")
+            -- Badges follow registry order and show every active debuff.
+            for index, entry in ipairs(active) do
+                local bonus = entry.bonusDamage > 0 and (" +" .. entry.bonusDamage .. " DMG") or ""
+                UI.label(entry.definition.badge .. " x" .. entry.stacks .. bonus, x - 132, y + 112 + (index - 1) * 22,
+                    264, "center", entry.definition.color, "small")
             end
             UI.addZone("enemy", x - 154, y - 92, 308, 200, i)
         end

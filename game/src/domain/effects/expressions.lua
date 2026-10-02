@@ -1,3 +1,4 @@
+local Counters = require("src.domain.effects.counters")
 local Expressions = {}
 
 -- Coerce a value to a non-negative whole-number effect amount.
@@ -10,11 +11,16 @@ end
 function Expressions.evaluate(expression, context)
     local kind = expression.kind
     if kind == "literal" then return expression.value end
-    if kind == "local" then return assert(context.locals[expression.name], "unknown local: " .. tostring(expression.name)) end
+    if kind == "card" then return expression.id end
+    if kind == "local" then
+        -- False is a valid calculated condition; only nil means unassigned.
+        local value = context.locals[expression.name]
+        assert(value ~= nil, "unknown local: " .. tostring(expression.name))
+        return value
+    end
     if kind == "counter" then
         -- Resolve the shorthand against the card being evaluated, including temporary copies.
-        local id = expression.id == "$thisCard" and context.cardId or expression.id
-        return context.query.counter(id)
+        return context.query.counter(Counters.key(expression, context), Counters.scope(expression))
     end
     if kind == "context" then
         if expression.path == "thisCardId" then return context.cardId end
@@ -46,6 +52,13 @@ function Expressions.amount(effect, context, field)
     -- Apply spell power after clamping the base amount, matching execution and descriptions.
     if effect.scalable then value = value * context.multiplier end
     return value
+end
+
+-- Capture optional recurring damage with its own spell-power setting.
+function Expressions.debuffDamage(effect, context)
+    if not effect.bonusDamage then return 0 end
+    -- Reuse amount clamping without inheriting the duration's scaling flag.
+    return Expressions.amount({ amount = effect.bonusDamage, scalable = effect.damageScalable }, context)
 end
 
 return Expressions

@@ -1,3 +1,6 @@
+import { ExecutionPreview } from "./ExecutionPreview";
+import { AuthoringCards } from "./effects/CounterField";
+import { replaceCard } from "./effects/references";
 import { useEffect, useMemo, useRef, useState } from "react";
 import initial from "../../game/content/content.json";
 import { DescriptionEditor } from "./DescriptionEditor";
@@ -13,16 +16,20 @@ type Selection =
   | { kind: "world"; id: "catalog" | "builder" };
 const draftKey = "cardgame.editor.draft.v1";
 
+// Copy imported data so editor updates never mutate the bundled catalog.
 function clone<T>(value: T): T { return JSON.parse(JSON.stringify(value)) as T; }
+// Choose the first available catalog entry for a new draft.
 function initialSelection(content: ContentDocument): Selection {
   if (content.cards[0]) return { kind: "card", id: content.cards[0].id };
   if (content.enemies[0]) return { kind: "enemy", id: content.enemies[0].id };
   return { kind: "card", id: "" };
 }
 
+// Coordinate catalog editing, draft persistence, and the embedded game preview.
 export default function App() {
   const gameUrl = `${import.meta.env.BASE_URL}game/index.html`;
   const [content, setContent] = useState<ContentDocument>(() => {
+    // Browser drafts take precedence over bundled content.
     const saved = localStorage.getItem(draftKey);
     return migrateDescriptions(saved ? JSON.parse(saved) as ContentDocument : clone(initial as ContentDocument));
   });
@@ -47,6 +54,7 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem(draftKey, JSON.stringify(content)); }, [content]);
   useEffect(() => {
+    // Accept preview acknowledgements only from the local editor origin.
     const listener = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || !event.data) return;
       if (event.data.type === "cardgame.content.result") {
@@ -59,31 +67,42 @@ export default function App() {
     return () => window.removeEventListener("message", listener);
   }, []);
 
+  // Keep counter readers and writers connected when a card is renamed.
   const updateCard = (card: CardDefinition) => {
-    const previousId = selection.id;
-    setContent((current) => ({ ...current, cards: current.cards.map((item) => item.id === previousId ? card : item), contentRevision: `draft-${Date.now()}` }));
+    const previousId = String(selection.id);
+    // Keep the old identity while a name temporarily collides during typing.
+    if (content.cards.some((item) => item.id === card.id && item.id !== previousId)) card = { ...card, id: previousId };
+    setContent((current) => replaceCard(current, previousId, card));
     if (card.id !== previousId) setSelection({ kind: "card", id: card.id });
   };
+  // Replace the selected enemy and keep its derived selection in sync.
   const updateEnemy = (enemy: EnemyDefinition) => {
+    // Name edits can change the derived enemy ID.
     const previousId = selection.id;
     setContent((current) => ({ ...current, enemies: current.enemies.map((item) => item.id === previousId ? enemy : item), contentRevision: `draft-${Date.now()}` }));
     if (enemy.id !== previousId) setSelection({ kind: "enemy", id: enemy.id });
   };
+  // Update one encounter setting without replacing other rooms.
   const updateRoom = (room: RoomDefinition) => {
     setContent((current) => ({ ...current, roomCurve: current.roomCurve.map((item) => item.room === room.room ? room : item), contentRevision: `draft-${Date.now()}` }));
   };
+  // Store endless-mode settings with a new draft revision.
   const updateEndless = (endless: ContentDocument["endless"]) => {
     setContent((current) => ({ ...current, endless, contentRevision: `draft-${Date.now()}` }));
   };
 
+  // Create a uniquely named card with a simple editable damage block.
   const addCard = () => {
+    // Reserve a free name before building its derived ID.
     let name = "New Card"; let suffix = 2;
     while (content.cards.some((card) => card.id === contentId("card", name))) name = `New Card ${suffix++}`;
     const id = contentId("card", name);
     const card: CardDefinition = { id, name, cost: 1, type: "DMG", element: "fire", target: "enemy", enabled: true, description: "Deal {dmg=2} damage to target.", availability: { startingDeck: 0, shop: true, shopChance: 50, copyLimit: 3 }, effects: [{ op: "damage", target: "selectedEnemy", amount: literal(2), scalable: true }] };
     setContent({ ...content, cards: [...content.cards, card] }); setSelection({ kind: "card", id });
   };
+  // Create an enemy with valid combat and encounter defaults.
   const addEnemy = () => {
+    // Avoid duplicate identities in the current catalog.
     let name = "New Enemy"; let suffix = 2;
     while (content.enemies.some((enemy) => enemy.id === contentId("enemy", name))) name = `New Enemy ${suffix++}`;
     const id = contentId("enemy", name);
@@ -93,8 +112,10 @@ export default function App() {
     };
     setContent({ ...content, enemies: [...content.enemies, enemy] }); setSelection({ kind: "enemy", id });
   };
+  // Remove the selected card and choose the nearest remaining entry.
   const deleteSelectedCard = () => {
     if (!selectedCard || !window.confirm(`Delete "${selectedCard.name || "Untitled card"}"? This cannot be undone.`)) return;
+    // Preserve a useful selection after removal.
     const deletedIndex = content.cards.findIndex((card) => card.id === selectedCard.id);
     const nextContent = removeCard(content, selectedCard.id);
     const nextCard = nextContent.cards[Math.min(deletedIndex, nextContent.cards.length - 1)];
@@ -104,25 +125,33 @@ export default function App() {
     else setSelection({ kind: "card", id: "" });
     setStatus(`Deleted ${selectedCard.name || selectedCard.id}`);
   };
+  // Download only drafts that pass content and effect validation.
   const exportJson = () => {
     if (issues.length) { setStatus("Fix validation issues before exporting"); return; }
+    // Revoke the temporary download URL immediately after dispatch.
     const url = URL.createObjectURL(new Blob([deterministicJson(content)], { type: "application/json" }));
     const anchor = document.createElement("a"); anchor.href = url; anchor.download = "content.json"; anchor.click(); URL.revokeObjectURL(url); setStatus("Exported content.json");
   };
+  // Migrate and validate imported JSON before replacing the draft.
   const importJson = async (file?: File) => {
     if (!file) return;
+    // Invalid imports leave the existing draft intact.
     try { const next = migrateDescriptions(JSON.parse(await file.text()) as ContentDocument); const nextIssues = validateContent(next); if (nextIssues.length) throw new Error(nextIssues[0].message); setContent(next); setSelection(initialSelection(next)); setStatus(`Imported ${file.name}`); }
     catch (error) { setStatus(`Import failed: ${error instanceof Error ? error.message : String(error)}`); }
   };
+  // Pass a validated snapshot to a fresh embedded game instance.
   const loadPreview = (nextStatus: string) => {
     if (issues.length) { setStatus("Fix validation issues before previewing"); return; }
+    // The featured card is available in the preview opening hand.
     const previewContent = { ...content, preview: { featuredCardId: selectedCard?.id } };
     localStorage.setItem("cardgame.preview.content", deterministicJson(previewContent));
     setStatus(nextStatus);
     setPreviewRunning(true);
     setPreviewInstance((current) => current + 1);
   };
+  // Reload the embedded game with the current authored snapshot.
   const applyPreview = () => loadPreview(previewRunning ? "Reloading preview…" : "Starting preview…");
+  // Unmount the embedded game while keeping the editor draft.
   const stopPreview = () => {
     setPreviewRunning(false);
     setStatus("Preview stopped");
@@ -131,11 +160,11 @@ export default function App() {
   const filteredCards = content.cards.filter((card) => card.name.toLowerCase().includes(query.toLowerCase()));
   const filteredEnemies = content.enemies.filter((enemy) => enemy.name.toLowerCase().includes(query.toLowerCase()));
 
-  return <div className="app-shell">
+  return <AuthoringCards.Provider value={content.cards}><div className="app-shell">
     <header className="topbar"><div className="brand"><span className="brand-mark">CF</span><div><b>Card Forge</b><small>Content editor</small></div></div><div className={`validation ${issues.length ? "invalid" : "valid"}`}>{issues.length ? `${issues.length} issue${issues.length === 1 ? "" : "s"}` : "Ready to preview"}</div><div className="top-actions"><button onClick={() => importRef.current?.click()}>Import</button><input ref={importRef} hidden type="file" accept="application/json" onChange={(event) => importJson(event.target.files?.[0])} /><button onClick={exportJson}>Export JSON</button><button className="primary" onClick={applyPreview}>Apply to Preview</button></div></header>
     <aside className="catalog"><div className="catalog-tools"><input aria-label="Search content" placeholder="Search content…" value={query} onChange={(event) => setQuery(event.target.value)} /><div><button onClick={addCard}>+ Card</button><button onClick={addEnemy}>+ Enemy</button></div></div><h2>World tools</h2><button className={`catalog-item ${selection.kind === "world" && selection.id === "catalog" ? "selected" : ""}`} onClick={() => setSelection({ kind: "world", id: "catalog" })}><i className="type-dot tiles" /><span><b>Tile catalog</b><small>115 labeled isometric sprites</small></span></button><button className={`catalog-item ${selection.kind === "world" && selection.id === "builder" ? "selected" : ""}`} onClick={() => setSelection({ kind: "world", id: "builder" })}><i className="type-dot generator" /><span><b>Room builder</b><small>WFC templates and preview</small></span></button><h2>Cards <span>{content.cards.length}</span></h2>{filteredCards.map((card) => <button className={`catalog-item ${selection.kind === "card" && selection.id === card.id ? "selected" : ""}`} key={card.id} onClick={() => setSelection({ kind: "card", id: card.id })}><i className={`type-dot element-${card.element}`} /><span><b>{card.name}</b><small>{card.cost} mana · {card.type} · {card.element}</small></span></button>)}<h2>Enemies <span>{content.enemies.length}</span></h2>{filteredEnemies.map((enemy) => <button className={`catalog-item ${selection.kind === "enemy" && selection.id === enemy.id ? "selected" : ""}`} key={enemy.id} onClick={() => setSelection({ kind: "enemy", id: enemy.id })}><i className="type-dot enemy" /><span><b>{enemy.name}</b><small>Power {enemyPower(enemy).toFixed(2)} · {enemy.damage.min}–{enemy.damage.max} ATK</small></span></button>)}<h2>Encounter curve</h2>{content.roomCurve.map((room) => <button className={`catalog-item ${selection.kind === "room" && selection.id === room.room ? "selected" : ""}`} key={room.room} onClick={() => setSelection({ kind: "room", id: room.room })}><i className="type-dot room" /><span><b>Room {room.room}</b><small>Power {room.power} · {room.minimumEnemies}–{room.maximumEnemies} enemies</small></span></button>)}<button className={`catalog-item ${selection.kind === "endless" ? "selected" : ""}`} onClick={() => setSelection({ kind: "endless", id: "endless" })}><i className="type-dot endless" /><span><b>Endless mode</b><small>Starts at {content.endless.startingPower} · +{content.endless.powerPerRoom} power</small></span></button></aside>
     <main className="inspector">
-      {selectedCard && <><div className="section-heading"><div><span>Card definition</span><h1>{selectedCard.name || "Untitled card"}</h1></div><div className="section-actions"><div className="card-chip">{selectedCard.type}</div><div className={`card-chip element-${selectedCard.element}`}>{selectedCard.element}</div><button type="button" className="delete-button" onClick={deleteSelectedCard}>Delete Card</button></div></div><section className="panel fields"><h2>Identity</h2><div className="field-grid"><label><span>Name</span><input value={selectedCard.name} onChange={(event) => { const name = event.target.value; updateCard({ ...selectedCard, name, id: contentId("card", name) }); }} /></label><label><span>Stable ID</span><input className="derived-id" value={selectedCard.id} readOnly aria-readonly="true" title="Generated automatically from the card name" /></label><label><span>Mana cost</span><input type="number" min="0" value={selectedCard.cost} onChange={(event) => updateCard({ ...selectedCard, cost: Number(event.target.value) })} /></label><label><span>Category</span><select value={selectedCard.type} onChange={(event) => updateCard({ ...selectedCard, type: event.target.value as CardDefinition["type"] })}><option>DMG</option><option>DEF</option><option>HEAL</option><option>UTIL</option></select></label><label><span>Element</span><select value={selectedCard.element} onChange={(event) => updateCard({ ...selectedCard, element: event.target.value as CardDefinition["element"] })}><option value="fire">Fire</option><option value="ice">Ice</option><option value="nature">Nature</option><option value="earth">Earth</option><option value="arcane">Arcane</option></select></label><label><span>Target</span><select value={selectedCard.target} onChange={(event) => updateCard({ ...selectedCard, target: event.target.value as CardDefinition["target"] })}><option value="enemy">One Enemy</option><option value="multi">Multiple Enemies</option><option value="all">All Enemies</option><option value="self">Self</option></select></label><label className="check"><input type="checkbox" checked={selectedCard.availability.shop} onChange={(event) => updateCard({ ...selectedCard, availability: { ...selectedCard.availability, shop: event.target.checked } })} /> Available in shop</label><label><span>Shop appearance chance</span><div className="input-suffix"><input type="number" min="0" max="100" step="1" disabled={!selectedCard.availability.shop} value={selectedCard.availability.shopChance} onChange={(event) => updateCard({ ...selectedCard, availability: { ...selectedCard.availability, shopChance: Number(event.target.value) } })} /><span>%</span></div></label><label><span>Deck copy limit</span><input type="number" min="1" value={selectedCard.availability.copyLimit} onChange={(event) => updateCard({ ...selectedCard, availability: { ...selectedCard.availability, copyLimit: Number(event.target.value) } })} /></label></div></section><section className="panel"><div className="panel-title"><div><h2>Rules text</h2><p>Handwrite the description and place live values exactly where you want them.</p></div></div><DescriptionEditor description={selectedCard.description} effects={selectedCard.effects} onChange={(description) => updateCard({ ...selectedCard, description })} /></section><section className="panel"><div className="panel-title"><div><h2>Effect blocks</h2><p>Effects resolve from top to bottom and supply the live values used above.</p></div></div><EffectEditor effects={selectedCard.effects} onChange={(effects) => updateCard({ ...selectedCard, effects })} /></section></>}
+      {selectedCard && <><div className="section-heading"><div><span>Card definition</span><h1>{selectedCard.name || "Untitled card"}</h1></div><div className="section-actions"><div className="card-chip">{selectedCard.type}</div><div className={`card-chip element-${selectedCard.element}`}>{selectedCard.element}</div><button type="button" className="delete-button" onClick={deleteSelectedCard}>Delete Card</button></div></div><section className="panel fields"><h2>Identity</h2><div className="field-grid"><label><span>Name</span><input value={selectedCard.name} onChange={(event) => { const name = event.target.value; updateCard({ ...selectedCard, name, id: contentId("card", name) }); }} /></label><label><span>Stable ID</span><input className="derived-id" value={selectedCard.id} readOnly aria-readonly="true" title="Generated automatically from the card name" /></label><label><span>Mana cost</span><input type="number" min="0" value={selectedCard.cost} onChange={(event) => updateCard({ ...selectedCard, cost: Number(event.target.value) })} /></label><label><span>Category</span><select value={selectedCard.type} onChange={(event) => updateCard({ ...selectedCard, type: event.target.value as CardDefinition["type"] })}><option>DMG</option><option>DEF</option><option>HEAL</option><option>UTIL</option></select></label><label><span>Element</span><select value={selectedCard.element} onChange={(event) => updateCard({ ...selectedCard, element: event.target.value as CardDefinition["element"] })}><option value="fire">Fire</option><option value="ice">Ice</option><option value="nature">Nature</option><option value="earth">Earth</option><option value="arcane">Arcane</option></select></label><label><span>Target</span><select value={selectedCard.target} onChange={(event) => updateCard({ ...selectedCard, target: event.target.value as CardDefinition["target"] })}><option value="enemy">One Enemy</option><option value="multi">Multiple Enemies</option><option value="all">All Enemies</option><option value="self">Self</option></select></label><label className="check"><input type="checkbox" checked={selectedCard.availability.shop} onChange={(event) => updateCard({ ...selectedCard, availability: { ...selectedCard.availability, shop: event.target.checked } })} /> Available in shop</label><label><span>Shop appearance chance</span><div className="input-suffix"><input type="number" min="0" max="100" step="1" disabled={!selectedCard.availability.shop} value={selectedCard.availability.shopChance} onChange={(event) => updateCard({ ...selectedCard, availability: { ...selectedCard.availability, shopChance: Number(event.target.value) } })} /><span>%</span></div></label><label><span>Deck copy limit</span><input type="number" min="1" value={selectedCard.availability.copyLimit} onChange={(event) => updateCard({ ...selectedCard, availability: { ...selectedCard.availability, copyLimit: Number(event.target.value) } })} /></label></div></section><section className="panel"><div className="panel-title"><div><h2>Rules text</h2><p>Handwrite the description and place live values exactly where you want them.</p></div></div><DescriptionEditor description={selectedCard.description} effects={selectedCard.effects} onChange={(description) => updateCard({ ...selectedCard, description })} /></section><section className="panel"><div className="panel-title"><div><h2>Effect blocks</h2><p>Effects resolve from top to bottom and supply the live values used above.</p></div></div><EffectEditor effects={selectedCard.effects} onChange={(effects) => updateCard({ ...selectedCard, effects })} /></section><ExecutionPreview card={selectedCard} cards={content.cards} /></>}
       {selectedEnemy && <>
         <div className="section-heading"><div><span>Enemy definition</span><h1>{selectedEnemy.name || "Untitled enemy"}</h1></div><div className="section-actions"><div className="power-chip">POWER {enemyPower(selectedEnemy).toFixed(2)}</div><div className="card-chip enemy">ENEMY</div></div></div>
         <section className="panel fields"><h2>Identity & stats</h2><div className="field-grid">
@@ -187,5 +216,5 @@ export default function App() {
       {selection.kind === "world" && <RoomBuilder mode={selection.id} />}
     </main>
     <aside className="preview"><div className="preview-heading"><div><span>Live preview</span><b>{status}</b></div><span className={`live-dot ${previewRunning ? "" : "stopped"}`} /></div>{selectedCard && <div className={`card-preview element-${selectedCard.element}`}><div className="mana-orb">{selectedCard.cost}</div><small>{selectedCard.type} · {selectedCard.element}</small><h2>{selectedCard.name}</h2><div className="art-placeholder"><span>✦</span></div><p>{describeCard(selectedCard) || "Add an effect to generate rules text."}</p></div>}<div className="game-frame"><div className="game-frame-title"><span>{previewRunning ? "Running game" : "Game preview stopped"}</span><div className="game-frame-actions"><button type="button" disabled={previewRunning} onClick={() => loadPreview("Starting preview…")}>Start</button><button type="button" disabled={!previewRunning} onClick={stopPreview}>Stop</button></div></div>{previewRunning ? <iframe key={previewInstance} ref={iframeRef} title="Pixel Card Game preview" src={`${gameUrl}?revision=${encodeURIComponent(content.contentRevision)}&instance=${previewInstance}`} /> : <div className="game-frame-idle"><b>Preview is off</b><span>Start it when you are ready to test the current draft.</span></div>}</div>{issues.length > 0 && <div className="issues"><h3>Needs attention</h3>{issues.slice(0, 6).map((issue) => <p key={`${issue.path}-${issue.message}`}><b>{issue.path}</b>{issue.message}</p>)}</div>}</aside>
-  </div>;
+  </div></AuthoringCards.Provider>;
 }

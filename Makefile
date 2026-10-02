@@ -13,6 +13,7 @@ assets: tools
 
 # The Lua game runs directly from source; no native build or asset archive is needed.
 run:
+	node tools/generate-debuffs.mjs
 	@if [ -z "$(LOVE_BIN)" ]; then \
 		echo "LÖVE was not found."; \
 		echo "Install LÖVE 11.5, then retry: make run"; \
@@ -23,6 +24,7 @@ run:
 
 # Compile Lua modules for syntax checks, then run each headless regression suite.
 test: tools
+	node tools/generate-debuffs.mjs --check
 	@find game -name '*.lua' -type f -print | while IFS= read -r file; do \
 		luajit -b "$$file" /tmp/cardgame-syntax.luac || exit 1; \
 	done
@@ -30,11 +32,16 @@ test: tools
 	luajit tests/test_content.lua
 	luajit tests/test_structure.lua
 	luajit tests/test_effects.lua
+	luajit tests/test_effect_contract.lua
+	luajit tests/test_debuffs.lua
 	luajit tests/test_progression.lua
 	luajit tests/test_contract.lua
 
 # Node 22.6+ runs this read-only check against the existing TypeScript model.
 test-contract:
+	node tools/generate-debuffs.mjs --check
+	luajit tests/test_effect_contract.lua
+	luajit tests/test_debuffs.lua
 	luajit tests/test_contract.lua
 	node --experimental-strip-types tests/test_contract.mts
 

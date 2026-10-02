@@ -141,11 +141,16 @@ function Game:finishEnemyPhase()
     return Combat.finishEnemyPhase(self.combat, self.deck, self.random)
 end
 
--- Advance enemy pacing and propagate defeat to the run state.
+-- Advance enemy pacing and coordinate defeats or clears caused by debuff hooks.
 function Game:update(dt)
     if self.run.state ~= "combat" then return end
+    local enemyPhase = self.combat.phase == "enemy"
     if Combat.update(self.combat, self.deck, self.run, dt, self.random, self.feedback) then
         Run.setState(self.run, "gameover")
+    elseif enemyPhase and self:livingEnemies() == 0 then
+        -- Boss transitions must hand control back after an enemy-phase clear.
+        Combat.setPhase(self.combat, "player")
+        self:checkEncounterClear()
     end
 end
 

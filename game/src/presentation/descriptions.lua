@@ -1,3 +1,4 @@
+local Debuffs = require("src.domain.debuffs.registry")
 local Expressions = require("src.domain.effects.expressions")
 local amount = Expressions.amount
 local clampAmount = Expressions.clampAmount
@@ -10,6 +11,7 @@ local function describeExpression(expression, context)
         local ok, value = pcall(Expressions.evaluate, expression, context)
         if ok then return tostring(value) end
     end
+    if expression.kind == "card" then return expression.id end
     if expression.kind == "literal" then return tostring(expression.value) end
     if expression.kind == "counter" then return "that card's count" end
     if expression.kind == "local" then return expression.name end
@@ -19,9 +21,9 @@ local function describeExpression(expression, context)
 end
 
 -- Build fallback prose from supported effect blocks when no authored text exists.
-local function describeGenerated(definition, query, cardId, multiplier)
+local function describeGenerated(definition, query, cardId, multiplier, instanceId)
     local phrases = {}
-    local context = query and { query = query, cardId = cardId, multiplier = multiplier, locals = {} } or nil
+    local context = query and { query = query, cardId = cardId, instanceId = instanceId, multiplier = multiplier, locals = {} } or nil
     for _, effect in ipairs(definition.effects) do
         if effect.op == "setLocal" and context then
             context.locals[effect.name] = Expressions.evaluate(effect.value, context)
@@ -35,7 +37,11 @@ local function describeGenerated(definition, query, cardId, multiplier)
             local value = context and amount(effect, context, "stacks") or describeExpression(effect.stacks)
             local target = effect.target == "allEnemies" and "all enemies"
                 or effect.target == "otherEnemies" and "all other enemies" or "the target"
-            phrases[#phrases + 1] = "Apply " .. value .. " Freeze to " .. target .. "."
+            phrases[#phrases + 1] = "Apply " .. value .. " " .. Debuffs.get(effect.id).label .. " to " .. target .. "."
+            if effect.bonusDamage then
+                local bonus = context and Expressions.debuffDamage(effect, context) or describeExpression(effect.bonusDamage)
+                phrases[#phrases + 1] = "With " .. tostring(bonus) .. " bonus damage per enemy action."
+            end
         elseif effect.op == "freeze" then phrases[#phrases + 1] = effect.target == "allEnemies" and "Freeze them." or "Freeze the target."
         elseif effect.op == "armor" then phrases[#phrases + 1] = "Gain " .. tostring(context and amount(effect, context) or describeExpression(effect.amount)) .. " Armor."
         elseif effect.op == "heal" then phrases[#phrases + 1] = "Heal " .. tostring(context and amount(effect, context) or describeExpression(effect.amount)) .. " HP."
@@ -89,7 +95,7 @@ end
 
 local tokenOps = {
     dmg = "damage", armor = "armor", heal = "heal", draw = "draw",
-    mana = "mana", stacks = "addStatus", freeze = "debuff",
+    mana = "mana", stacks = "addStatus",
 }
 
 -- Index value-bearing effects in traversal order for description placeholders.
@@ -97,9 +103,16 @@ local function collectValueEffects(effects, values)
     for _, effect in ipairs(effects) do
         if tokenOps.dmg == effect.op or tokenOps.armor == effect.op or tokenOps.heal == effect.op
             or tokenOps.draw == effect.op or tokenOps.mana == effect.op or tokenOps.stacks == effect.op
-            or tokenOps.freeze == effect.op then
-            values[effect.op] = values[effect.op] or {}
-            values[effect.op][#values[effect.op] + 1] = effect
+            or effect.op == "debuff" then
+            -- Namespace debuff tokens so they cannot collide with ordinary effect names.
+            local key = effect.op == "debuff" and ("debuff:" .. Debuffs.get(effect.id).token) or effect.op
+            values[key] = values[key] or {}
+            values[key][#values[key] + 1] = effect
+            if effect.op == "debuff" and effect.bonusDamage then
+                local damageKey = "debuffDamage:" .. Debuffs.get(effect.id).token
+                values[damageKey] = values[damageKey] or {}
+                values[damageKey][#values[damageKey] + 1] = effect
+            end
         elseif effect.op == "if" then
             -- Index both branches for stable token numbering; this does not execute either branch.
             collectValueEffects(effect["then"] or {}, values)
@@ -119,10 +132,16 @@ local function primeDescriptionLocals(effects, context)
 end
 
 -- Replace authored value tokens with live amounts or their baseline formulas.
-local function renderDescription(definition, query, cardId, multiplier)
-    local context = query and { query = query, cardId = cardId, multiplier = multiplier, locals = {} } or nil
+local function renderDescription(definition, query, cardId, multiplier, instanceId)
+    local context = query and { query = query, cardId = cardId, instanceId = instanceId, multiplier = multiplier, locals = {} } or nil
     if context then primeDescriptionLocals(definition.effects, context) end
 
+    -- The combat adapter can simulate ordered effects without touching real state.
+    local resolvedValues, resolvedBonuses
+    if query and query.previewValues then
+        local ok, values, bonuses = pcall(query.previewValues, definition, cardId, instanceId, multiplier)
+        if ok then resolvedValues, resolvedBonuses = values, bonuses end
+    end
     local values, occurrences = {}, {}
     collectValueEffects(definition.effects, values)
     -- Resolve each token independently; authored baseline values remain the fallback.
@@ -130,15 +149,22 @@ local function renderDescription(definition, query, cardId, multiplier)
         local baseline, usesFormula = evaluateDisplayFormula(formula)
         if baseline == nil then return "?" end
         local baseName = name:gsub("%d+$", "")
-        local op = tokenOps[baseName]
+        local damageToken = baseName:match("^(.-)_damage$")
+        local isDamage = damageToken and Debuffs.byToken[damageToken]
+        local op = isDamage and ("debuffDamage:" .. damageToken) or Debuffs.byToken[baseName] and ("debuff:" .. baseName) or tokenOps[baseName]
         occurrences[baseName] = (occurrences[baseName] or 0) + 1
         -- A suffix such as dmg2 selects an effect explicitly; otherwise use occurrence order.
         local explicitIndex = tonumber(name:match("(%d+)$"))
         local effect = op and values[op] and values[op][explicitIndex or occurrences[baseName]]
         local resolved = baseline
-        if effect and context then
+        if effect and resolvedValues then
+            local selected = isDamage and (resolvedBonuses or {}) or resolvedValues
+            resolved = selected[effect] or baseline
+        elseif effect and context then
             local usesStacks = effect.op == "addStatus" or effect.op == "debuff"
-            local ok, value = pcall(amount, effect, context, usesStacks and "stacks" or "amount")
+            local ok, value
+            if isDamage then ok, value = pcall(Expressions.debuffDamage, effect, context)
+            else ok, value = pcall(amount, effect, context, usesStacks and "stacks" or "amount") end
             if ok then resolved = value end
         end
         -- The asterisk marks arithmetic baselines or amounts changed by live evaluation.
@@ -149,11 +175,11 @@ local function renderDescription(definition, query, cardId, multiplier)
 end
 
 -- Use authored text when present, otherwise generate supported effect prose.
-function Descriptions.describe(definition, query, cardId, multiplier)
+function Descriptions.describe(definition, query, cardId, multiplier, instanceId)
     if type(definition.description) == "string" and definition.description ~= "" then
-        return renderDescription(definition, query, cardId, multiplier)
+        return renderDescription(definition, query, cardId, multiplier, instanceId)
     end
-    return describeGenerated(definition, query, cardId, multiplier)
+    return describeGenerated(definition, query, cardId, multiplier, instanceId)
 end
 
 return Descriptions

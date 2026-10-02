@@ -1,3 +1,5 @@
+import { useContext } from "react";
+import { AuthoringCards, CounterField } from "./effects/CounterField";
 import type { Expression } from "./model";
 
 interface Props { value: Expression; onChange: (value: Expression) => void; label?: string; condition?: boolean }
@@ -7,10 +9,14 @@ const contextOptions = [
   ["hp", "Player HP"], ["turn", "Turn number"], ["livingEnemies", "Living enemies"],
 ] as const;
 
+/** Edit typed expression trees; comparisons produce conditions, other values feed formulas. */
 export function ExpressionEditor({ value, onChange, label = "Value", condition = false }: Props) {
+  const cards = useContext(AuthoringCards);
   const kind = value.kind === "compare" ? "compare" : value.kind === "binary" ? "formula" : value.kind;
+  // Changing kinds starts a valid, independent expression tree.
   const setKind = (next: string) => {
     if (next === "literal") onChange({ kind: "literal", value: 1 });
+    if (next === "card") onChange({ kind: "card", id: cards[0]?.id || "card.missing" });
     if (next === "counter") onChange({ kind: "counter", id: "$thisCard" });
     if (next === "context") onChange({ kind: "context", path: condition ? "previousCardId" : "mana" });
     if (next === "local") onChange({ kind: "local", name: "damage" });
@@ -22,15 +28,17 @@ export function ExpressionEditor({ value, onChange, label = "Value", condition =
     <label><span>{label}</span>
       <select value={kind} onChange={(event) => setKind(event.target.value)}>
         {!condition && <option value="literal">Number</option>}
-        {!condition && <option value="counter">Times played this turn</option>}
-        <option value="context">Game value</option>
-        {!condition && <option value="local">Calculated value</option>}
+        {!condition && <option value="counter">Counter value</option>}
+        {!condition && <option value="context">Game value</option>}
+        {!condition && <option value="card">Card reference</option>}
+        <option value="local">{condition ? "Calculated condition" : "Calculated value"}</option>
         {!condition && <option value="formula">Formula</option>}
-        {condition && <option value="compare">Comparison</option>}
+        <option value="compare">Comparison</option>
       </select>
     </label>
     {value.kind === "literal" && <input aria-label={`${label} number`} type="number" min="0" value={value.value} onChange={(event) => onChange({ ...value, value: Math.max(0, Number(event.target.value)) })} />}
-    {value.kind === "counter" && <span className="token">this card</span>}
+    {value.kind === "counter" && <CounterField value={value} onChange={(reference) => onChange({ ...value, ...reference })} />}
+    {value.kind === "card" && <select aria-label={`${label} card`} value={value.id} onChange={(event) => onChange({ ...value, id: event.target.value })}>{!cards.some((card) => card.id === value.id) && <option value={value.id}>Missing: {value.id}</option>}{cards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}</select>}
     {value.kind === "local" && <input aria-label={`${label} calculated name`} value={value.name} onChange={(event) => onChange({ ...value, name: event.target.value })} />}
     {value.kind === "context" && <select aria-label={`${label} game value`} value={value.path} onChange={(event) => onChange({ ...value, path: event.target.value as Extract<Expression, { kind: "context" }>["path"] })}>
       {contextOptions.map(([id, text]) => <option key={id} value={id}>{text}</option>)}

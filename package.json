@@ -1,11 +1,13 @@
 {
   "scripts": {
-    "build:web": "love.js game/ dist/web -c -t \"Pixel Card Game\"",
+    "build:web": "npm run debuffs:generate && love.js game/ dist/web -c -t \"Pixel Card Game\"",
     "preview:prepare": "node tools/prepare-editor-preview.mjs",
     "dev": "npm run build:web && npm run preview:prepare && vite --config editor/vite.config.ts",
     "build:editor": "npm run build:web && npm run preview:prepare && vite build --config editor/vite.config.ts",
     "typecheck": "tsc -p editor/tsconfig.json --noEmit",
-    "test:editor": "vitest run --config editor/vite.config.ts"
+    "test:editor": "npm run debuffs:check && node --test tools/generate-debuffs.test.mjs && vitest run --config editor/vite.config.ts",
+    "debuffs:generate": "node tools/generate-debuffs.mjs",
+    "debuffs:check": "node tools/generate-debuffs.mjs --check"
   },
   "dependencies": {
     "love.js": "^11.4.1",

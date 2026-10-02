@@ -21,8 +21,8 @@ end
 -- Adapt card definitions and optional live combat queries to text rendering.
 function CardPresentation.describe(cards, cardOrReference, game)
     local card = type(cardOrReference) == "table" and cardOrReference or cards:make(cardOrReference)
-    return Descriptions.describe(cards:definition(card), game and Combat.queries(game.combat, game.run),
-        card.id, game and Combat.surgeMultiplier(game.combat))
+    return Descriptions.describe(cards:definition(card), game and Combat.queries(game.combat, game.run, game.deck, nil, card.cost),
+        card.id, game and Combat.surgeMultiplier(game.combat), card.instanceId)
 end
 
 return CardPresentation

@@ -1,11 +1,18 @@
+import type { DebuffId } from "./effects/debuffs.ts";
+import { effectDefaults } from "./effects/defaults.ts";
+
 export type CardType = "DMG" | "DEF" | "HEAL" | "UTIL";
 export type CardElement = "fire" | "ice" | "nature" | "earth" | "arcane";
 export type CardTarget = "enemy" | "multi" | "all" | "self";
 export type EffectTarget = "selectedEnemy" | "otherEnemies" | "allEnemies";
 
+/** Counter ownership is encoded by id; omitted scope preserves legacy turn counters. */
+export interface CounterReference { id: string; scope?: "turn" | "combat" }
+
 export type Expression =
   | { kind: "literal"; value: number }
-  | { kind: "counter"; id: string }
+  | ({ kind: "counter" } & CounterReference)
+  | { kind: "card"; id: string }
   | { kind: "local"; name: string }
   | { kind: "context"; path: "previousCardId" | "thisCardId" | "mana" | "hp" | "turn" | "livingEnemies" }
   | { kind: "binary"; operator: "add" | "subtract" | "multiply" | "min" | "max"; left: Expression; right: Expression }
@@ -13,13 +20,14 @@ export type Expression =
 
 export type Effect =
   | { op: "damage"; target: EffectTarget; amount: Expression; scalable?: boolean }
-  | { op: "debuff"; id: "debuff.freeze"; target: EffectTarget; stacks: Expression; scalable?: boolean }
+  | { op: "debuff"; id: DebuffId; target: EffectTarget; stacks: Expression; scalable?: boolean; bonusDamage?: Expression; damageScalable?: boolean }
   /** Legacy schema-v1 Freeze effects are migrated to a debuff block on load. */
   | { op: "freeze"; target: EffectTarget }
   | { op: "armor" | "heal" | "draw"; amount: Expression; scalable?: boolean }
   | { op: "mana"; amount: Expression; cap: number; scalable?: boolean }
   | { op: "addStatus"; id: "status.spell_power" | "status.mirror"; stacks: Expression; scalable?: boolean }
-  | { op: "incrementCounter"; id: string; amount: number }
+  | ({ op: "incrementCounter" | "subtractCounter" | "setCounter"; amount: number | Expression } & CounterReference)
+  | ({ op: "resetCounter" } & CounterReference)
   | { op: "setLocal"; name: string; value: Expression }
   | { op: "if"; condition: Expression; then: Effect[]; else?: Effect[] };
 
@@ -84,20 +92,11 @@ export interface ContentDocument {
   endless: EndlessDefinition;
 }
 
+/** Create a numeric expression without sharing mutable blocks. */
 export const literal = (value: number): Expression => ({ kind: "literal", value });
 
+/** Create an independent block using the registered defaults. */
 export function newEffect(op: Effect["op"]): Effect {
-  if (op === "damage") return { op, target: "selectedEnemy", amount: literal(2), scalable: true };
-  if (op === "debuff") return { op, id: "debuff.freeze", target: "selectedEnemy", stacks: literal(1), scalable: false };
-  if (op === "freeze") return { op, target: "selectedEnemy" };
-  if (op === "mana") return { op, amount: literal(2), cap: 3, scalable: true };
-  if (op === "addStatus") return { op, id: "status.spell_power", stacks: literal(1) };
-  if (op === "incrementCounter") return { op, id: "$thisCard", amount: 1 };
-  if (op === "setLocal") return { op, name: "damage", value: literal(2) };
-  if (op === "if") return {
-    op,
-    condition: { kind: "compare", operator: "eq", left: { kind: "context", path: "previousCardId" }, right: { kind: "context", path: "thisCardId" } },
-    then: [{ op: "damage", target: "selectedEnemy", amount: literal(1), scalable: true }],
-  };
-  return { op, amount: literal(op === "heal" ? 5 : 2), scalable: true };
+  // Factories keep nested branches and formulas independent across cards.
+  return effectDefaults[op]();
 }

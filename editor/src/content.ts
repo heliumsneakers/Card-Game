@@ -1,9 +1,13 @@
+import { debuffForToken, debuffForDamageToken, getDebuff, legacyFreezeId } from "./effects/debuffs.ts";
+import { initialPreviewState, previewEffects } from "./effects/preview.ts";
+import { validateEffects } from "./effects/validation.ts";
 import { literal, type CardDefinition, type ContentDocument, type Effect, type EndlessDefinition, type EnemyDefinition, type Expression, type RoomDefinition } from "./model.ts";
 
 export interface Issue { path: string; message: string }
 
 const elements = new Set(["fire", "ice", "nature", "earth", "arcane"]);
 
+/** Choose a visual element for older definitions that lack one. */
 function defaultElement(type: CardDefinition["type"]): CardDefinition["element"] {
   if (type === "HEAL") return "nature";
   if (type === "DEF") return "earth";
@@ -11,6 +15,7 @@ function defaultElement(type: CardDefinition["type"]): CardDefinition["element"]
   return "fire";
 }
 
+/** Normalize display names into the schema-v1 identifier format. */
 export function contentId(kind: "card" | "enemy", name: string): string {
   const slug = name
     .trim()
@@ -36,6 +41,7 @@ export const defaultEndless: EndlessDefinition = {
   maximumBudgetRatio: 1.05,
 };
 
+/** Estimate enemy strength unless the designer supplies an override. */
 export function enemyPower(enemy: EnemyDefinition): number {
   if (enemy.generation?.powerOverride !== undefined) return enemy.generation.powerOverride;
   const averageHp = (enemy.hp.min + enemy.hp.max) / 2;
@@ -43,6 +49,7 @@ export function enemyPower(enemy: EnemyDefinition): number {
   return (averageHp / 8.5) * (0.4 + 0.6 * (averageDamage / 2.5));
 }
 
+/** Apply the encounter bonus for multiple simultaneous enemies. */
 export function groupMultiplier(count: number): number {
   if (count <= 1) return 1;
   if (count === 2) return 1.5;
@@ -52,6 +59,7 @@ export function groupMultiplier(count: number): number {
 
 export interface EncounterCandidate { enemyIds: string[]; power: number }
 
+/** Enumerate eligible enemy combinations within each room’s copy limits. */
 export function encounterCandidates(content: ContentDocument, room: RoomDefinition): EncounterCandidate[] {
   const eligible = content.enemies
     .filter((enemy) => enemy.enabled && enemy.generation.spawnEnabled && !enemy.generation.bossOnly)
@@ -61,6 +69,7 @@ export function encounterCandidates(content: ContentDocument, room: RoomDefiniti
   const current: EnemyDefinition[] = [];
   const counts = new Map<string, number>();
   const hasTag = (enemy: EnemyDefinition, tag: string) => enemy.generation.tags.includes(tag);
+  // Generate each multiset once by advancing from the last chosen index.
   const visit = (startIndex: number, targetCount: number) => {
     if (current.length === targetCount) {
       if (room.excludedTags.some((tag) => current.some((enemy) => hasTag(enemy, tag)))) return;
@@ -86,6 +95,7 @@ export function encounterCandidates(content: ContentDocument, room: RoomDefiniti
   return results.sort((a, b) => a.power - b.power);
 }
 
+/** Supply encounter defaults for legacy enemy definitions. */
 function defaultGeneration(enemy: Pick<EnemyDefinition, "id">): EnemyDefinition["generation"] {
   return {
     spawnEnabled: enemy.id !== "enemy.bone_lord",
@@ -97,9 +107,11 @@ function defaultGeneration(enemy: Pick<EnemyDefinition, "id">): EnemyDefinition[
   };
 }
 
+/** Describe an expression when no authored numeric token is available. */
 function expressionText(expression: Expression): string {
   if (expression.kind === "literal") return String(expression.value);
-  if (expression.kind === "counter") return "times this card was played this turn";
+  if (expression.kind === "counter") return `${expression.id} counter (${expression.scope || "turn"})`;
+  if (expression.kind === "card") return expression.id;
   if (expression.kind === "local") return expression.name;
   if (expression.kind === "context") {
     const labels: Record<string, string> = { previousCardId: "the previous card", thisCardId: "this card", mana: "current mana", hp: "current HP", turn: "the turn", livingEnemies: "living enemies" };
@@ -109,10 +121,14 @@ function expressionText(expression: Expression): string {
   return `${expressionText(expression.left)} ${symbols[expression.operator]} ${expressionText(expression.right)}`;
 }
 
+/** Generate fallback prose for visible card effects. */
 function effectText(effect: Effect): string {
   const targetText = (target: "selectedEnemy" | "otherEnemies" | "allEnemies") => target === "allEnemies" ? " to all enemies" : target === "otherEnemies" ? " to all other enemies" : " to the target";
   if (effect.op === "damage") return `Deal ${expressionText(effect.amount)} damage${targetText(effect.target)}.`;
-  if (effect.op === "debuff") return `Apply ${expressionText(effect.stacks)} Freeze${targetText(effect.target)}.`;
+  if (effect.op === "debuff") {
+    const bonus = effect.bonusDamage ? ` With ${expressionText(effect.bonusDamage)} bonus damage per enemy action.` : "";
+    return `Apply ${expressionText(effect.stacks)} ${getDebuff(effect.id).label}${targetText(effect.target)}.${bonus}`;
+  }
   if (effect.op === "freeze") return effect.target === "allEnemies" ? "Freeze them." : "Freeze the target.";
   if (effect.op === "armor") return `Gain ${expressionText(effect.amount)} Armor.`;
   if (effect.op === "heal") return `Heal ${expressionText(effect.amount)} HP.`;
@@ -125,6 +141,7 @@ function effectText(effect: Effect): string {
 
 const descriptionToken = /\{([a-z][a-z0-9_]*)\s*=\s*([^{}]+)\}/gi;
 
+/** Evaluate the small numeric token grammar without executing source code. */
 function evaluateDisplayFormula(source: string): number | undefined {
   const compact = source.replace(/\s+/g, "");
   if (!/^\d+(?:[+*-]\d+)*$/.test(compact)) return undefined;
@@ -138,13 +155,16 @@ function evaluateDisplayFormula(source: string): number | undefined {
   return Math.max(0, Math.floor(value));
 }
 
+/** Index both branches in stable order for description token numbering. */
 function flattenedEffects(effects: Effect[]): Effect[] {
   return effects.flatMap((effect) => effect.op === "if"
     ? [effect, ...flattenedEffects(effect.then), ...flattenedEffects(effect.else || [])]
     : [effect]);
 }
 
+/** Estimate a baseline for newly inserted description tokens. */
 function staticEffectValue(expression: Expression, effects: Effect[], seen = new Set<string>()): number | undefined {
+  if (expression.kind === "card") return undefined;
   if (expression.kind === "literal") return expression.value;
   if (expression.kind === "counter" || expression.kind === "context") return 0;
   if (expression.kind === "compare") return undefined;
@@ -165,9 +185,14 @@ function staticEffectValue(expression: Expression, effects: Effect[], seen = new
   return Math.max(left, right);
 }
 
-const tokenEffectOps: Record<string, Effect["op"]> = { dmg: "damage", armor: "armor", heal: "heal", draw: "draw", mana: "mana", stacks: "addStatus", freeze: "debuff" };
+const tokenEffectOps: Record<string, Effect["op"]> = { dmg: "damage", armor: "armor", heal: "heal", draw: "draw", mana: "mana", stacks: "addStatus" };
 
-export function renderDescription(template: string, effects: Effect[] = []): string {
+/** Render base card text using ordered effect evaluation. */
+export function renderDescription(template: string, effects: Effect[] = [], cardId = "card.preview"): string {
+  // Base descriptions use zero counters and no spell power, but preserve effect order.
+  const scenario = initialPreviewState();
+  scenario.mana = 0; scenario.hp = 0; scenario.turn = 0; scenario.enemies = [];
+  const preview = previewEffects({ id: cardId, effects }, scenario);
   const allEffects = flattenedEffects(effects);
   const occurrences: Record<string, number> = {};
   return template.replace(descriptionToken, (_token, name: string, formula: string) => {
@@ -175,24 +200,28 @@ export function renderDescription(template: string, effects: Effect[] = []): str
     if (value === undefined) return "?";
     const baseName = name.replace(/\d+$/, "");
     occurrences[baseName] = (occurrences[baseName] || 0) + 1;
-    const matching = allEffects.filter((effect) => effect.op === tokenEffectOps[baseName]);
+    // Debuff tokens select only their own ID, including inside nested branches.
+    const damageDebuff = debuffForDamageToken(baseName);
+    const debuff = damageDebuff || debuffForToken(baseName);
+    const matching = allEffects.filter((effect) => debuff ? effect.op === "debuff" && effect.id === debuff.id && (!damageDebuff || effect.bonusDamage !== undefined) : effect.op === tokenEffectOps[baseName]);
     const effect = matching[(Number(name.match(/\d+$/)?.[0]) || occurrences[baseName]) - 1];
-    let resolved: number | undefined;
-    if (effect?.op === "addStatus" || effect?.op === "debuff") resolved = staticEffectValue(effect.stacks, effects);
-    else if (effect && (effect.op === "damage" || effect.op === "armor" || effect.op === "heal" || effect.op === "draw" || effect.op === "mana")) resolved = staticEffectValue(effect.amount, effects);
+    const resolved = effect ? (damageDebuff ? preview.bonusDamageValues : preview.values).get(effect) : undefined;
     const displayed = resolved ?? value;
     const modified = /[+*-]/.test(formula.trim().slice(1)) || (resolved !== undefined && resolved !== value);
     return `${displayed}${modified ? "*" : ""}`;
   });
 }
 
+/** Prefer authored text and resolve its values against the card definition. */
 export function describeCard(card: CardDefinition): string {
   const template = card.description || card.effects.map(effectText).filter(Boolean).join(" ");
-  return renderDescription(template, card.effects);
+  return renderDescription(template, card.effects, card.id);
 }
 
+/** Create editable value tokens for cards without authored descriptions. */
 function migratedDescription(card: CardDefinition): string {
   const counters: Record<string, number> = {};
+  // Number repeated effect tokens in their authored order.
   const token = (name: string, expression: Expression) => {
     counters[name] = (counters[name] || 0) + 1;
     const numberedName = counters[name] === 1 ? name : `${name}${counters[name]}`;
@@ -201,7 +230,11 @@ function migratedDescription(card: CardDefinition): string {
   return card.effects.map((effect) => {
     const target = "target" in effect && effect.target === "allEnemies" ? "all enemies" : "target" in effect && effect.target === "otherEnemies" ? "all other enemies" : "target";
     if (effect.op === "damage") return `Deal ${token("dmg", effect.amount)} damage to ${target}.`;
-    if (effect.op === "debuff") return `Apply {freeze=${staticEffectValue(effect.stacks, card.effects) ?? 1}} Freeze to ${target}.`;
+    if (effect.op === "debuff") {
+      const definition = getDebuff(effect.id);
+      const bonus = effect.bonusDamage ? ` With ${token(`${definition.token}_damage`, effect.bonusDamage)} bonus damage per enemy action.` : "";
+      return `Apply ${token(definition.token, effect.stacks)} ${definition.label} to ${target}.${bonus}`;
+    }
     if (effect.op === "freeze") return effect.target === "allEnemies" ? "Freeze them." : "Freeze the target.";
     if (effect.op === "armor") return `Gain ${token("armor", effect.amount)} Armor.`;
     if (effect.op === "heal") return `Heal ${token("heal", effect.amount)} HP.`;
@@ -213,14 +246,18 @@ function migratedDescription(card: CardDefinition): string {
   }).filter(Boolean).join(" ");
 }
 
+/** Normalize legacy blocks while preserving authored order and references. */
 function migrateEffects(effects: Effect[]): Effect[] {
+  // Legacy numeric increments remain valid; missing amounts mean one.
   return effects.map((effect) => {
-    if (effect.op === "freeze") return { op: "debuff", id: "debuff.freeze", target: effect.target, stacks: literal(1), scalable: false };
+    if (effect.op === "incrementCounter" && effect.amount == null) return { ...effect, amount: 1 };
+    if (effect.op === "freeze") return { op: "debuff", id: legacyFreezeId, target: effect.target, stacks: literal(1), scalable: false };
     if (effect.op === "if") return { ...effect, then: migrateEffects(effect.then), else: effect.else ? migrateEffects(effect.else) : undefined };
     return effect;
   });
 }
 
+/** Upgrade older content with editor defaults while preserving existing values. */
 export function migrateDescriptions(content: ContentDocument): ContentDocument {
   return {
     ...content,
@@ -250,6 +287,7 @@ export function migrateDescriptions(content: ContentDocument): ContentDocument {
   };
 }
 
+/** Validate catalog metadata and typed effect trees before export or preview. */
 export function validateContent(content: ContentDocument): Issue[] {
   const issues: Issue[] = [];
   const ids = new Set<string>();
@@ -274,19 +312,7 @@ export function validateContent(content: ContentDocument): Issue[] {
       if (evaluateDisplayFormula(match[2]) === undefined) add(`${path}.description`, `Invalid formula in {${match[1]}=…}. Use whole numbers with +, - or *.`);
     }
     if (!card.effects.length) add(`${path}.effects`, "Add at least one effect.");
-    const validateTargets = (effects: Effect[], effectsPath: string) => effects.forEach((effect, effectIndex) => {
-      const effectPath = `${effectsPath}[${effectIndex}]`;
-      if (effect.op === "if") {
-        validateTargets(effect.then, `${effectPath}.then`);
-        validateTargets(effect.else || [], `${effectPath}.else`);
-        return;
-      }
-      if (effect.op !== "damage" && effect.op !== "debuff" && effect.op !== "freeze") return;
-      if (effect.target === "selectedEnemy" && card.target !== "enemy" && card.target !== "multi") add(`${effectPath}.target`, "Selected Enemy requires a One Enemy or Multiple Enemies card.");
-      if (effect.target === "otherEnemies" && card.target !== "multi") add(`${effectPath}.target`, "All Other Enemies requires a Multiple Enemies card.");
-      if (effect.target === "allEnemies" && card.target !== "all" && card.target !== "multi") add(`${effectPath}.target`, "All Enemies requires an All Enemies or Multiple Enemies card.");
-    });
-    validateTargets(card.effects, `${path}.effects`);
+    validateEffects(card.effects, `${path}.effects`, card, new Set(content.cards.map((item) => item.id)), add);
   });
   content.enemies.forEach((enemy, index) => {
     const path = `enemies[${index}]`;
@@ -332,6 +358,7 @@ export function validateContent(content: ContentDocument): Issue[] {
   return issues;
 }
 
+/** Check encounter bounds before generating candidate combinations. */
 function validateEncounterSettings(
   settings: Pick<RoomDefinition, "power" | "minimumEnemies" | "maximumEnemies" | "minimumBudgetRatio" | "maximumBudgetRatio"> | EndlessDefinition,
   path: string,
@@ -344,10 +371,12 @@ function validateEncounterSettings(
   if (!Number.isFinite(settings.maximumBudgetRatio) || settings.maximumBudgetRatio < settings.minimumBudgetRatio) add(`${path}.maximumBudgetRatio`, "Maximum budget ratio must be at least the minimum.");
 }
 
+/** Serialize content consistently for downloads and preview snapshots. */
 export function deterministicJson(content: ContentDocument): string {
   return `${JSON.stringify(content, null, 2)}\n`;
 }
 
+/** Remove one definition without mutating the original catalog. */
 export function removeCard(content: ContentDocument, cardId: string): ContentDocument {
   return {
     ...content,

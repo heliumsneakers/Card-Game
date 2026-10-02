@@ -1,0 +1,620 @@
+{
+  "valid": [
+    {
+      "name": "legacy Firebolt grows across resolutions",
+      "effects": [
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "binary",
+            "operator": "add",
+            "left": {
+              "kind": "literal",
+              "value": 2
+            },
+            "right": {
+              "kind": "counter",
+              "id": "$thisCard",
+              "scope": "turn"
+            }
+          },
+          "scalable": true
+        },
+        {
+          "op": "incrementCounter",
+          "id": "$thisCard",
+          "scope": "turn",
+          "amount": 1
+        }
+      ],
+      "repetitions": 2,
+      "expectedHp": 25,
+      "expectedCounters": {
+        "turn:card.test": 2
+      }
+    },
+    {
+      "name": "earlier increments affect later reads",
+      "effects": [
+        {
+          "op": "incrementCounter",
+          "id": "$thisCard",
+          "scope": "turn",
+          "amount": {
+            "kind": "literal",
+            "value": 2
+          }
+        },
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "counter",
+            "id": "$thisCard",
+            "scope": "turn"
+          },
+          "scalable": true
+        }
+      ],
+      "expectedHp": 28,
+      "expectedCounters": {
+        "turn:card.test": 2
+      }
+    },
+    {
+      "name": "locals capture before subsequent mutation",
+      "effects": [
+        {
+          "op": "setLocal",
+          "name": "damage",
+          "value": {
+            "kind": "binary",
+            "operator": "add",
+            "left": {
+              "kind": "literal",
+              "value": 2
+            },
+            "right": {
+              "kind": "counter",
+              "id": "$thisCard",
+              "scope": "turn"
+            }
+          }
+        },
+        {
+          "op": "incrementCounter",
+          "id": "$thisCard",
+          "scope": "turn",
+          "amount": {
+            "kind": "literal",
+            "value": 4
+          }
+        },
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "local",
+            "name": "damage"
+          },
+          "scalable": true
+        }
+      ],
+      "expectedHp": 28,
+      "expectedCounters": {
+        "turn:card.test": 4
+      }
+    },
+    {
+      "name": "combat shared charges can be spent",
+      "effects": [
+        {
+          "op": "incrementCounter",
+          "id": "shared.charges",
+          "scope": "combat",
+          "amount": {
+            "kind": "literal",
+            "value": 3
+          }
+        },
+        {
+          "op": "if",
+          "condition": {
+            "kind": "compare",
+            "operator": "gte",
+            "left": {
+              "kind": "counter",
+              "id": "shared.charges",
+              "scope": "combat"
+            },
+            "right": {
+              "kind": "literal",
+              "value": 2
+            }
+          },
+          "then": [
+            {
+              "op": "subtractCounter",
+              "id": "shared.charges",
+              "scope": "combat",
+              "amount": {
+                "kind": "literal",
+                "value": 2
+              }
+            },
+            {
+              "op": "damage",
+              "target": "selectedEnemy",
+              "amount": {
+                "kind": "literal",
+                "value": 6
+              },
+              "scalable": true
+            }
+          ],
+          "else": [
+            {
+              "op": "damage",
+              "target": "selectedEnemy",
+              "amount": {
+                "kind": "literal",
+                "value": 1
+              },
+              "scalable": true
+            }
+          ]
+        }
+      ],
+      "expectedHp": 24,
+      "expectedCounters": {
+        "combat:shared.charges": 1
+      }
+    },
+    {
+      "name": "set subtract and reset are unscaled",
+      "effects": [
+        {
+          "op": "setCounter",
+          "id": "$thisCard",
+          "scope": "turn",
+          "amount": {
+            "kind": "literal",
+            "value": 5
+          }
+        },
+        {
+          "op": "subtractCounter",
+          "id": "$thisCard",
+          "scope": "turn",
+          "amount": {
+            "kind": "literal",
+            "value": 9
+          }
+        },
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "binary",
+            "operator": "add",
+            "left": {
+              "kind": "counter",
+              "id": "$thisCard",
+              "scope": "turn"
+            },
+            "right": {
+              "kind": "literal",
+              "value": 1
+            }
+          },
+          "scalable": true
+        },
+        {
+          "op": "incrementCounter",
+          "id": "$thisCard",
+          "scope": "turn",
+          "amount": {
+            "kind": "literal",
+            "value": 7
+          }
+        },
+        {
+          "op": "resetCounter",
+          "id": "$thisCard"
+        }
+      ],
+      "spellPower": 2,
+      "expectedHp": 26,
+      "expectedCounters": {
+        "turn:card.test": 0
+      }
+    },
+    {
+      "name": "turn and combat keys are independent",
+      "effects": [
+        {
+          "op": "incrementCounter",
+          "id": "$thisCard",
+          "scope": "turn",
+          "amount": {
+            "kind": "literal",
+            "value": 2
+          }
+        },
+        {
+          "op": "incrementCounter",
+          "id": "$thisCard",
+          "scope": "combat",
+          "amount": {
+            "kind": "literal",
+            "value": 4
+          }
+        },
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "binary",
+            "operator": "add",
+            "left": {
+              "kind": "counter",
+              "id": "$thisCard",
+              "scope": "turn"
+            },
+            "right": {
+              "kind": "counter",
+              "id": "$thisCard",
+              "scope": "combat"
+            }
+          },
+          "scalable": true
+        }
+      ],
+      "expectedHp": 24,
+      "expectedCounters": {
+        "turn:card.test": 2,
+        "combat:card.test": 4
+      }
+    },
+    {
+      "name": "instance ownership does not increment definition",
+      "effects": [
+        {
+          "op": "incrementCounter",
+          "id": "$thisInstance",
+          "scope": "turn",
+          "amount": {
+            "kind": "literal",
+            "value": 1
+          }
+        },
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "counter",
+            "id": "$thisInstance",
+            "scope": "turn"
+          },
+          "scalable": true
+        }
+      ],
+      "instanceId": "7",
+      "expectedHp": 29,
+      "expectedCounters": {
+        "turn:@instance:7": 1
+      }
+    },
+    {
+      "name": "another card and shared formulas",
+      "effects": [
+        {
+          "op": "incrementCounter",
+          "id": "card.partner",
+          "scope": "turn",
+          "amount": {
+            "kind": "context",
+            "path": "mana"
+          }
+        },
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "counter",
+            "id": "card.partner",
+            "scope": "turn"
+          },
+          "scalable": true
+        }
+      ],
+      "expectedHp": 28,
+      "expectedCounters": {
+        "turn:card.partner": 2
+      }
+    },
+    {
+      "name": "false local conditions choose otherwise",
+      "effects": [
+        {
+          "op": "setLocal",
+          "name": "match",
+          "value": {
+            "kind": "compare",
+            "operator": "eq",
+            "left": {
+              "kind": "context",
+              "path": "previousCardId"
+            },
+            "right": {
+              "kind": "card",
+              "id": "card.partner"
+            }
+          }
+        },
+        {
+          "op": "if",
+          "condition": {
+            "kind": "local",
+            "name": "match"
+          },
+          "then": [
+            {
+              "op": "damage",
+              "target": "selectedEnemy",
+              "amount": {
+                "kind": "literal",
+                "value": 10
+              },
+              "scalable": true
+            }
+          ],
+          "else": [
+            {
+              "op": "damage",
+              "target": "selectedEnemy",
+              "amount": {
+                "kind": "literal",
+                "value": 3
+              },
+              "scalable": true
+            }
+          ]
+        }
+      ],
+      "expectedHp": 27,
+      "expectedCounters": {}
+    },
+    {
+      "name": "branch assignments are available afterward",
+      "effects": [
+        {
+          "op": "if",
+          "condition": {
+            "kind": "compare",
+            "operator": "gte",
+            "left": {
+              "kind": "literal",
+              "value": 0
+            },
+            "right": {
+              "kind": "literal",
+              "value": 1
+            }
+          },
+          "then": [
+            {
+              "op": "setLocal",
+              "name": "power",
+              "value": {
+                "kind": "literal",
+                "value": 10
+              }
+            }
+          ],
+          "else": [
+            {
+              "op": "setLocal",
+              "name": "power",
+              "value": {
+                "kind": "literal",
+                "value": 3
+              }
+            }
+          ]
+        },
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "local",
+            "name": "power"
+          },
+          "scalable": true
+        }
+      ],
+      "expectedHp": 27,
+      "expectedCounters": {}
+    }
+  ],
+  "invalid": [
+    {
+      "name": "fractional increment",
+      "effects": [
+        {
+          "op": "incrementCounter",
+          "id": "$thisCard",
+          "scope": "turn",
+          "amount": 1.5
+        }
+      ]
+    },
+    {
+      "name": "negative increment",
+      "effects": [
+        {
+          "op": "incrementCounter",
+          "id": "$thisCard",
+          "scope": "turn",
+          "amount": -1
+        }
+      ]
+    },
+    {
+      "name": "missing card reference",
+      "effects": [
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "counter",
+            "id": "card.missing",
+            "scope": "turn"
+          },
+          "scalable": true
+        }
+      ]
+    },
+    {
+      "name": "unknown local",
+      "effects": [
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "local",
+            "name": "unset"
+          },
+          "scalable": true
+        }
+      ]
+    },
+    {
+      "name": "local assigned in one branch only",
+      "effects": [
+        {
+          "op": "if",
+          "condition": {
+            "kind": "compare",
+            "operator": "gte",
+            "left": {
+              "kind": "literal",
+              "value": 1
+            },
+            "right": {
+              "kind": "literal",
+              "value": 1
+            }
+          },
+          "then": [
+            {
+              "op": "setLocal",
+              "name": "x",
+              "value": {
+                "kind": "literal",
+                "value": 1
+              }
+            }
+          ]
+        },
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "local",
+            "name": "x"
+          },
+          "scalable": true
+        }
+      ]
+    },
+    {
+      "name": "card arithmetic",
+      "effects": [
+        {
+          "op": "damage",
+          "target": "selectedEnemy",
+          "amount": {
+            "kind": "binary",
+            "operator": "add",
+            "left": {
+              "kind": "context",
+              "path": "thisCardId"
+            },
+            "right": {
+              "kind": "literal",
+              "value": 1
+            }
+          },
+          "scalable": true
+        }
+      ]
+    },
+    {
+      "name": "number condition",
+      "effects": [
+        {
+          "op": "if",
+          "condition": {
+            "kind": "literal",
+            "value": 0
+          },
+          "then": []
+        }
+      ]
+    },
+    {
+      "name": "unsupported lifetime",
+      "effects": [
+        {
+          "op": "incrementCounter",
+          "id": "$thisCard",
+          "scope": "run",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "name": "reserved counter key",
+      "effects": [
+        {
+          "op": "incrementCounter",
+          "id": "@instance:1",
+          "scope": "turn",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "name": "empty shared counter",
+      "effects": [
+        {
+          "op": "incrementCounter",
+          "id": "",
+          "scope": "turn",
+          "amount": 1
+        }
+      ]
+    },
+    {
+      "name": "invalid amount shape",
+      "effects": [
+        {
+          "op": "incrementCounter",
+          "id": "$thisCard",
+          "scope": "turn",
+          "amount": "oops"
+        }
+      ]
+    },
+    {
+      "name": "unsupported operation",
+      "effects": [
+        {
+          "op": "unknown"
+        }
+      ]
+    }
+  ]
+}

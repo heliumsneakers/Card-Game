@@ -1,3 +1,4 @@
+import { debuffRegistry } from "./effects/debuffs";
 import { useRef } from "react";
 import type { Effect, Expression } from "./model";
 
@@ -14,7 +15,6 @@ const tokenNames: Partial<Record<Effect["op"], string>> = {
   draw: "draw",
   mana: "mana",
   addStatus: "stacks",
-  debuff: "freeze",
 };
 
 const tokenLabels: Record<string, string> = {
@@ -24,19 +24,22 @@ const tokenLabels: Record<string, string> = {
   draw: "Cards drawn",
   mana: "Mana",
   stacks: "Status stacks",
-  freeze: "Freeze stacks",
 };
 
+// Collect value-bearing blocks from both conditional outcomes.
 function flattenEffects(effects: Effect[]): Effect[] {
   return effects.flatMap((effect) => effect.op === "if"
     ? [effect, ...flattenEffects(effect.then), ...flattenEffects(effect.else || [])]
     : [effect]);
 }
 
+// Estimate a baseline for a newly inserted value token.
 function staticValue(expression: Expression, effects: Effect[], seen = new Set<string>()): number {
+  if (expression.kind === "card") return 0;
   if (expression.kind === "literal") return expression.value;
   if (expression.kind === "counter" || expression.kind === "context") return 0;
   if (expression.kind === "local") {
+    // Break cycles while following named calculation dependencies.
     if (seen.has(expression.name)) return 0;
     const setter = flattenEffects(effects).find((effect): effect is Extract<Effect, { op: "setLocal" }> =>
       effect.op === "setLocal" && effect.name === expression.name);
@@ -54,6 +57,7 @@ function staticValue(expression: Expression, effects: Effect[], seen = new Set<s
   return Math.max(left, right);
 }
 
+// Find the numeric expression associated with a description token.
 function effectExpression(effect: Effect): Expression | undefined {
   if (effect.op === "damage" || effect.op === "armor" || effect.op === "heal" || effect.op === "draw" || effect.op === "mana") return effect.amount;
   if (effect.op === "addStatus") return effect.stacks;
@@ -61,24 +65,35 @@ function effectExpression(effect: Effect): Expression | undefined {
   return undefined;
 }
 
+// Insert editable live-value tokens into freely authored card prose.
 export function DescriptionEditor({ description, effects, onChange }: Props) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const counters: Record<string, number> = {};
+  // Keep token numbering stable across repeated operations.
   const blocks = flattenEffects(effects).flatMap((effect) => {
-    const baseName = tokenNames[effect.op];
+    // Registry tokens keep different debuff amounts from sharing occurrence numbers.
+    const debuff = effect.op === "debuff" ? debuffRegistry.get(effect.id) : undefined;
+    const baseName = debuff?.token || tokenNames[effect.op];
     const expression = effectExpression(effect);
     if (!baseName || !expression) return [];
-    counters[baseName] = (counters[baseName] || 0) + 1;
-    const name = counters[baseName] === 1 ? baseName : `${baseName}${counters[baseName]}`;
-    return [{ name, label: tokenLabels[baseName], value: staticValue(expression, effects) }];
+    const entries = [{ token: baseName, label: debuff ? `${debuff.label} stacks` : tokenLabels[baseName], expression }];
+    // Offer a second live token when this block includes recurring damage.
+    if (debuff && effect.op === "debuff" && effect.bonusDamage) entries.push({ token: `${baseName}_damage`, label: `${debuff.label} bonus damage`, expression: effect.bonusDamage });
+    return entries.map((entry) => {
+      counters[entry.token] = (counters[entry.token] || 0) + 1;
+      const name = counters[entry.token] === 1 ? entry.token : `${entry.token}${counters[entry.token]}`;
+      return { name, label: entry.label, value: staticValue(entry.expression, effects) };
+    });
   });
 
+  // Insert a token at the caret and restore focus after rendering.
   const insertBlock = (block: typeof blocks[number]) => {
     const textarea = inputRef.current;
     const start = textarea?.selectionStart ?? description.length;
     const end = textarea?.selectionEnd ?? start;
     const token = `{${block.name}=${block.value}}`;
     onChange(`${description.slice(0, start)}${token}${description.slice(end)}`);
+    // React updates the textarea before the caret is restored.
     requestAnimationFrame(() => {
       textarea?.focus();
       textarea?.setSelectionRange(start + token.length, start + token.length);

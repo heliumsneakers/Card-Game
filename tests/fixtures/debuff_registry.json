@@ -1,0 +1,21 @@
+{
+  "definition": {
+    "id": "debuff.test_stun",
+    "label": "Test Stun",
+    "token": "test_stun",
+    "stackLabel": "Turns stunned",
+    "defaultStacks": 2,
+    "scalable": false,
+    "behavior": "skipAction",
+    "actionText": "IS STUNNED",
+    "badge": "STUNNED",
+    "color": [0.8, 0.7, 0.4]
+  },
+  "effects": [
+    { "op": "debuff", "id": "debuff.freeze", "target": "selectedEnemy", "stacks": { "kind": "literal", "value": 1 } },
+    { "op": "debuff", "id": "debuff.test_stun", "target": "selectedEnemy", "stacks": { "kind": "literal", "value": 3 } },
+    { "op": "debuff", "id": "debuff.freeze", "target": "selectedEnemy", "stacks": { "kind": "literal", "value": 2 } }
+  ],
+  "description": "Freeze {freeze=0}; Stun {test_stun=0}; Freeze again {freeze2=0}.",
+  "expectedDescription": "Freeze 1*; Stun 3*; Freeze again 2*."
+}

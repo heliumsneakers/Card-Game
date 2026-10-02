@@ -1,6 +1,17 @@
+local Debuffs = require("src.domain.debuffs.registry")
 local Deck = require("src.domain.deck")
 local Resolver = require("src.domain.effects.resolver")
 local Combat = {}
+local effectActions
+local Expressions = require("src.domain.effects.expressions")
+
+-- Copy mutable preview state without sharing nested tables with combat.
+local function copyState(value)
+    if type(value) ~= "table" then return value end
+    local result = {}
+    for key, child in pairs(value) do result[key] = copyState(child) end
+    return result
+end
 
 -- Centralize combat-phase assignment, including clearing the phase on defeat.
 function Combat.setPhase(state, phase)
@@ -30,7 +41,7 @@ function Combat.new()
     Combat.setPhase(state, "mulligan")
     state.wave, state.turn = 1, 1
     state.maxMana, state.mana = 1, 1
-    state.statuses, state.turnCounters = {}, {}
+    state.statuses, state.turnCounters, state.combatCounters = {}, {}, {}
     state.previousCardId = nil
     return state
 end
@@ -42,10 +53,33 @@ function Combat.spawnEnemies(state, catalog, specs, boss, random, scale)
 end
 
 -- Scalar queries expose no mutable game tables to effects or descriptions.
-function Combat.queries(state, player)
+function Combat.queries(state, player, piles, targetIndex, previewCost)
     return {
+        -- Resolve descriptions against isolated state using the real action adapter.
+        previewValues = function(definition, cardId, instanceId, multiplier)
+            local shadow, person = copyState(state), copyState(player)
+            local deck = copyState(piles or { hand = {}, draw = {}, discard = {} })
+            local values, bonusValues = {}, {}
+            -- The inspected card pays its cost and leaves hand before its effects.
+            shadow.mana = shadow.mana - (previewCost or definition.cost or 0)
+            for index, card in ipairs(deck.hand) do
+                if card.instanceId == instanceId then table.remove(deck.hand, index); break end
+            end
+            Resolver.resolve(definition, cardId, Combat.queries(shadow, person),
+                effectActions(shadow, deck, person, function(limit) return limit end, nil, targetIndex or 1), multiplier, instanceId,
+                function(effect, context)
+                    -- Bind values to blocks so both branch numbering and ordering remain stable.
+                    if effect.op == "debuff" and effect.bonusDamage then bonusValues[effect] = Expressions.debuffDamage(effect, context) end
+                    if effect.op == "debuff" or effect.op == "addStatus" then values[effect] = Expressions.amount(effect, context, "stacks")
+                    elseif effect.op == "damage" or effect.op == "armor" or effect.op == "heal" or effect.op == "draw" or effect.op == "mana" then values[effect] = Expressions.amount(effect, context) end
+                end)
+            return values, bonusValues
+        end,
         -- Counters are read on demand so earlier effects can influence later expressions.
-        counter = function(id) return state.turnCounters[id] or 0 end,
+        counter = function(id, scope)
+            local counters = scope == "combat" and state.combatCounters or state.turnCounters
+            return counters[id] or 0
+        end,
         -- Expose only the supported scalar fields, not arbitrary combat or run data.
         value = function(path)
             if path == "livingEnemies" then return Combat.livingEnemies(state) end
@@ -75,7 +109,7 @@ local function eachTarget(state, target, targetIndex, callback)
 end
 
 -- Closures bind the chosen target and dependencies. Handlers cannot reach state.
-local function effectActions(state, piles, player, random, feedback, targetIndex)
+effectActions = function(state, piles, player, random, feedback, targetIndex)
     return {
         -- Bind target resolution and damage feedback behind one mutation operation.
         damage = function(target, amount)
@@ -83,11 +117,9 @@ local function effectActions(state, piles, player, random, feedback, targetIndex
             eachTarget(state, target, targetIndex, function(enemy) Combat.damageEnemy(state, enemy, amount, feedback) end)
         end,
         -- Debuffs share target selection and retain their authoritative stack count.
-        debuff = function(target, id, stacks)
+        debuff = function(target, id, stacks, bonusDamage)
             eachTarget(state, target, targetIndex, function(enemy)
-                enemy.debuffs = enemy.debuffs or {}
-                enemy.debuffs[id] = (enemy.debuffs[id] or 0) + stacks
-                if id == "debuff.freeze" then enemy.frozen = enemy.debuffs[id] > 0 end
+                Debuffs.apply(enemy, id, stacks, bonusDamage)
             end)
         end,
         -- Armor persists with the player across room-local combat resets.
@@ -103,8 +135,14 @@ local function effectActions(state, piles, player, random, feedback, targetIndex
             state.statuses[id] = (state.statuses[id] or 0) + stacks
         end,
         -- Accumulate a counter until the shared turn initialization clears it.
-        incrementCounter = function(id, amount)
-            state.turnCounters[id] = (state.turnCounters[id] or 0) + amount
+        incrementCounter = function(id, amount, scope)
+            local counters = scope == "combat" and state.combatCounters or state.turnCounters
+            counters[id] = math.max(0, (counters[id] or 0) + amount)
+        end,
+        -- Set/reset reuse the same lifetime selection without changing other counters.
+        setCounter = function(id, amount, scope)
+            local counters = scope == "combat" and state.combatCounters or state.turnCounters
+            counters[id] = math.max(0, amount)
         end,
     }
 end
@@ -153,7 +191,7 @@ function Combat.resolveCard(state, piles, player, cards, random, feedback, card,
     local definition = cards:definition(card)
     -- Capture the multiplier now, while scalar queries remain live during execution.
     Resolver.resolve(definition, card.id, Combat.queries(state, player),
-        effectActions(state, piles, player, random, feedback, targetIndex), Combat.surgeMultiplier(state))
+        effectActions(state, piles, player, random, feedback, targetIndex), Combat.surgeMultiplier(state), card.instanceId)
     -- Only definitions that explicitly retain spell power leave its stacks available.
     local retainsSpellPower = false
     for _, id in ipairs(definition.retainsStatuses or {}) do
@@ -244,15 +282,12 @@ function Combat.update(state, piles, player, dt, random, feedback)
         return
     end
 
-    local freezeStacks = enemy.debuffs and (enemy.debuffs["debuff.freeze"] or 0) or (enemy.frozen and 1 or 0)
-    if freezeStacks > 0 then
-        local remaining = freezeStacks - 1
-        enemy.debuffs = enemy.debuffs or {}
-        enemy.debuffs["debuff.freeze"] = remaining
-        enemy.frozen = remaining > 0
-        local suffix = remaining > 0 and ("  •  " .. remaining .. " LEFT") or ""
-        if feedback then feedback:notice(enemy.name .. " IS FROZEN" .. suffix, 0.65) end
-    else
+    -- Registered debuffs run before the attack and own their expiration rules.
+    local skip = Debuffs.beforeAction(enemy, {
+        damage = function(amount) Combat.damageEnemy(state, enemy, amount, feedback) end,
+        notice = feedback and function(message) feedback:notice(message, 0.65) end or nil,
+    })
+    if enemy.alive and not skip then
         Combat.damagePlayer(state, player, enemy.pow, feedback)
         if feedback then feedback:notice(enemy.name .. " HITS FOR " .. enemy.pow, 0.65) end
     end
