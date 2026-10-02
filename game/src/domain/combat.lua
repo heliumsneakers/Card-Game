@@ -208,11 +208,10 @@ function Combat.canPlay(state, piles, cards, index, targetIndex, targetIndices)
     local requiredCount = chosenEnemyCount(definition.effects)
     if requiredCount then
         if type(targetIndices) ~= "table" or #targetIndices ~= requiredCount then return false end
-        local seen = {}
         for _, selectedIndex in ipairs(targetIndices) do
             local enemy = state.enemies[selectedIndex]
-            if not enemy or not enemy.alive or seen[selectedIndex] then return false end
-            seen[selectedIndex] = true
+            -- Repeated indexes intentionally represent repeated effect applications.
+            if not enemy or not enemy.alive then return false end
         end
         targetIndex = targetIndices[1]
     end

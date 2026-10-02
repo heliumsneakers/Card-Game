@@ -91,8 +91,12 @@ function App:closeInspection()
     self.inspection = nil
 end
 
--- Resolve the pressed card zone and open a hold-to-inspect overlay.
+-- Handle held cards for inspection and held enemies for target clearing.
 function App:inspect(zone)
+    if zone.id == "enemy" then
+        self.combatController:deselectTarget(zone.payload)
+        return true
+    end
     local card
     if zone.id == "card" then card = self.game.deck.hand[zone.payload]
     elseif zone.id == "shop" then card = self.game.cards:make(zone.payload)

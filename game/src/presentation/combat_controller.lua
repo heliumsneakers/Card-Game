@@ -21,13 +21,25 @@ function Controller:play(index, targetIndex, targetIndices)
     return played
 end
 
--- Confirm only after the required number of distinct enemies is selected.
+-- Confirm once the selected enemy applications reach the required count.
 function Controller:confirmTargets()
     local required = self.selected and self.game:targetRequirement(self.selected)
     if not required or #self.targetIndices ~= required then return false end
     local targets = {}
     for index, enemyIndex in ipairs(self.targetIndices) do targets[index] = enemyIndex end
     return self:play(self.selected, targets[1], targets)
+end
+
+-- Remove every application assigned to one enemy after a hold gesture.
+function Controller:deselectTarget(enemyIndex)
+    local removed = false
+    for index = #self.targetIndices, 1, -1 do
+        if self.targetIndices[index] == enemyIndex then
+            table.remove(self.targetIndices, index)
+            removed = true
+        end
+    end
+    return removed
 end
 
 -- Clear selection for a valid end-turn request and delegate the rules.
@@ -63,10 +75,7 @@ function Controller:activate(zone)
         if self.selected then
             local required = game:targetRequirement(self.selected)
             if required then
-                -- Clicking a chosen enemy toggles it off; new picks stop at the limit.
-                for index, enemyIndex in ipairs(self.targetIndices) do
-                    if enemyIndex == zone.payload then table.remove(self.targetIndices, index); return end
-                end
+                -- Repeated clicks assign another effect application to the same enemy.
                 if #self.targetIndices < required then self.targetIndices[#self.targetIndices + 1] = zone.payload end
             else self:play(self.selected, zone.payload) end
         end
