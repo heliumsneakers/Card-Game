@@ -26,7 +26,7 @@ export function AmountFields({ effect, onChange }: FieldProps) {
   // Targets and caps remain optional capabilities of the selected operation.
   return <>
     {"target" in effect && <TargetField value={effect.target} allowMultiple={effect.op === "damage"} onChange={(target) => {
-      if (effect.op !== "damage") return onChange({ ...effect, target } as Effect);
+      if (effect.op !== "damage") return onChange(Object.assign({}, effect, { target }) as Effect);
       const { targetCount: _oldCount, ...withoutCount } = effect;
       onChange(target === "selectedEnemies" ? { ...effect, target, targetCount: effect.targetCount || 2 } : { ...withoutCount, target });
     }} />}
