@@ -7,10 +7,21 @@ import { CounterField } from "./CounterField";
 
 export interface FieldProps { effect: Effect; onChange: (effect: Effect) => void }
 
+/** Update a target mode and retain the chosen count only for group selection. */
+function updateEnemyTarget(effect: Effect, target: EffectTarget, onChange: (effect: Effect) => void) {
+  const next = Object.assign({}, effect, { target }) as Effect & { targetCount?: number };
+  if (target === "selectedEnemies") next.targetCount = next.targetCount || 2;
+  else delete next.targetCount;
+  onChange(next);
+}
+
 /** Select an enemy group independently from the numeric amount. */
-function TargetField({ value, onChange, allowMultiple = false }: { value: EffectTarget; onChange: (target: EffectTarget) => void; allowMultiple?: boolean }) {
+function TargetField({ value, onChange, allowMultiple = false, targetCount, onCountChange }: { value: EffectTarget; onChange: (target: EffectTarget) => void; allowMultiple?: boolean; targetCount?: number; onCountChange?: (count: number) => void }) {
   // Card-level target compatibility is checked by the content validator.
-  return <label><span>Target</span><select value={value} onChange={(event) => onChange(event.target.value as EffectTarget)}><option value="selectedEnemy">Selected enemy</option>{allowMultiple && <option value="selectedEnemies">Choose multiple enemies</option>}<option value="otherEnemies">All other enemies</option><option value="allEnemies">All enemies</option></select></label>;
+  return <>
+    <label><span>Target</span><select value={value} onChange={(event) => onChange(event.target.value as EffectTarget)}><option value="selectedEnemy">Selected enemy</option>{allowMultiple && <option value="selectedEnemies">Choose multiple enemies</option>}<option value="otherEnemies">All other enemies</option><option value="allEnemies">All enemies</option></select></label>
+    {allowMultiple && value === "selectedEnemies" && <label><span>Enemies to choose</span><input type="number" min="1" step="1" value={targetCount ?? 2} onChange={(event) => onCountChange?.(Number(event.target.value))} /></label>}
+  </>;
 }
 
 /** Share spell-power controls across value-bearing effects. */
@@ -25,12 +36,7 @@ export function AmountFields({ effect, onChange }: FieldProps) {
   if (!("amount" in effect) || typeof effect.amount === "number") return null;
   // Targets and caps remain optional capabilities of the selected operation.
   return <>
-    {"target" in effect && <TargetField value={effect.target} allowMultiple={effect.op === "damage"} onChange={(target) => {
-      if (effect.op !== "damage") return onChange(Object.assign({}, effect, { target }) as Effect);
-      const { targetCount: _oldCount, ...withoutCount } = effect;
-      onChange(target === "selectedEnemies" ? { ...effect, target, targetCount: effect.targetCount || 2 } : { ...withoutCount, target });
-    }} />}
-    {effect.op === "damage" && effect.target === "selectedEnemies" && <label><span>Enemies to choose</span><input type="number" min="1" step="1" value={effect.targetCount ?? 2} onChange={(event) => onChange({ ...effect, targetCount: Number(event.target.value) })} /></label>}
+    {effect.op === "damage" && <TargetField value={effect.target} allowMultiple targetCount={effect.targetCount} onChange={(target) => updateEnemyTarget(effect, target, onChange)} onCountChange={(targetCount) => onChange({ ...effect, targetCount })} />}
     <ExpressionEditor value={effect.amount} onChange={(amount) => onChange({ ...effect, amount } as Effect)} label="Amount" />
     {effect.op === "mana" && <label><span>Mana cap</span><input type="number" min="0" value={effect.cap} onChange={(event) => onChange({ ...effect, cap: Number(event.target.value) })} /></label>}
     <ScalingField effect={effect} onChange={onChange} />
@@ -65,7 +71,7 @@ export function StackFields({ effect, onChange }: FieldProps) {
     <label><span>{effect.op === "debuff" ? "Debuff" : "Status"}</span><select value={effect.id} onChange={(event) => onChange({ ...effect, id: event.target.value } as Effect)}>
       {effect.op === "debuff" ? Array.from(debuffRegistry.values()).map((definition) => <option key={definition.id} value={definition.id}>{definition.label}</option>) : <><option value="status.spell_power">Spell power</option><option value="status.mirror">Mirror copy</option></>}
     </select></label>
-    {effect.op === "debuff" && <TargetField value={effect.target} onChange={(target) => onChange({ ...effect, target })} />}
+    {effect.op === "debuff" && <TargetField value={effect.target} allowMultiple targetCount={effect.targetCount} onChange={(target) => updateEnemyTarget(effect, target, onChange)} onCountChange={(targetCount) => onChange({ ...effect, targetCount })} />}
     <ExpressionEditor value={effect.stacks} onChange={(stacks) => onChange({ ...effect, stacks })} label={effect.op === "debuff" ? debuffRegistry.get(effect.id)?.stackLabel || "Stacks" : "Stacks"} />
     <ScalingField effect={effect} onChange={onChange} />
     {effect.op === "debuff" && <DebuffDamageFields effect={effect} onChange={onChange} />}

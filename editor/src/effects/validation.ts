@@ -109,10 +109,10 @@ export function validateEffects(effects: unknown, path: string, card: Pick<CardD
     if (effect.op === "mana" && effect.cap !== undefined && (typeof effect.cap !== "number" || !Number.isSafeInteger(effect.cap) || effect.cap < 0)) add(at, "Mana cap must be a non-negative whole number.");
     if (["damage", "debuff", "freeze"].includes(String(effect.op))) {
       if (effect.target === "selectedEnemies") {
-        if (effect.op !== "damage") add(at, "Choosing multiple enemies is supported by damage effects.");
+        if (effect.op !== "damage" && effect.op !== "debuff") add(at, "Choosing multiple enemies is supported by damage and debuff effects.");
         if (card.target !== "multi") add(at, "Choosing multiple enemies requires a Multiple Enemies card target.");
         if (typeof effect.targetCount !== "number" || !Number.isSafeInteger(effect.targetCount) || effect.targetCount < 1) add(`${at}.targetCount`, "Choose a positive whole number of enemies.");
-        else chosenTargetCounts.push(effect.targetCount);
+        else if (effect.op === "damage" || effect.op === "debuff") chosenTargetCounts.push(effect.targetCount);
       } else if (!["selectedEnemy", "otherEnemies", "allEnemies"].includes(String(effect.target))) add(at, "Unsupported enemy target.");
       if (effect.target === "selectedEnemy" && card.target !== "enemy" && card.target !== "multi") add(at, "Selected enemy requires One Enemy or Multiple Enemies.");
       if (effect.target === "otherEnemies" && card.target !== "multi") add(at, "Other enemies requires Multiple Enemies.");
@@ -120,6 +120,6 @@ export function validateEffects(effects: unknown, path: string, card: Pick<CardD
     }
   });
   // One confirmation selection must satisfy every conditional damage branch.
-  if (depth === 0 && chosenTargetCounts.some((count) => count !== chosenTargetCounts[0])) add(path, "All chosen-enemy damage effects on a card must use the same enemy count.");
+  if (depth === 0 && chosenTargetCounts.some((count) => count !== chosenTargetCounts[0])) add(path, "All chosen-enemy effects on a card must use the same enemy count.");
   return locals;
 }

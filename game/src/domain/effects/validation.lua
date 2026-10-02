@@ -150,10 +150,10 @@ function Validation.effects(effects, path, errors, depth, cardTarget, cardIds, l
                 if op == "damage" or op == "debuff" or op == "freeze" then
                     local target = effect.target
                     if target == "selectedEnemies" then
-                        if op ~= "damage" then add(at, "choosing multiple enemies is supported by damage effects") end
+                        if op ~= "damage" and op ~= "debuff" then add(at, "choosing multiple enemies is supported by damage and debuff effects") end
                         if cardTarget ~= "multi" then add(at, "choosing multiple enemies requires a multi card target") end
                         if not integer(effect.targetCount) or effect.targetCount < 1 then add(at .. ".targetCount", "choose a positive whole number of enemies")
-                        else chosenTargetCounts[#chosenTargetCounts + 1] = effect.targetCount end
+                        elseif op == "damage" or op == "debuff" then chosenTargetCounts[#chosenTargetCounts + 1] = effect.targetCount end
                     elseif target ~= "selectedEnemy" and target ~= "otherEnemies" and target ~= "allEnemies" then add(at, "unsupported enemy target") end
                     if target == "selectedEnemy" and cardTarget ~= "enemy" and cardTarget ~= "multi" then add(at, "selected enemy requires enemy or multi card target") end
                     if target == "otherEnemies" and cardTarget ~= "multi" then add(at, "other enemies requires multi card target") end
@@ -165,7 +165,7 @@ function Validation.effects(effects, path, errors, depth, cardTarget, cardIds, l
     -- All branches share one selection, so their chosen-enemy counts must agree.
     if depth == 0 then
         for _, count in ipairs(chosenTargetCounts) do
-            if count ~= chosenTargetCounts[1] then add(path, "all chosen-enemy damage effects on a card must use the same enemy count"); break end
+            if count ~= chosenTargetCounts[1] then add(path, "all chosen-enemy effects on a card must use the same enemy count"); break end
         end
     end
     return locals

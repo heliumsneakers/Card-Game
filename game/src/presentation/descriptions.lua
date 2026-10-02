@@ -46,7 +46,8 @@ local function describeGenerated(definition, query, cardId, multiplier, instance
         elseif effect.op == "debuff" then
             local value = context and amount(effect, context, "stacks") or describeExpression(effect.stacks)
             local target = effect.target == "allEnemies" and "all enemies"
-                or effect.target == "otherEnemies" and "all other enemies" or "the target"
+                or effect.target == "otherEnemies" and "all other enemies"
+                or effect.target == "selectedEnemies" and (tostring(effect.targetCount) .. " chosen enemies") or "the target"
             phrases[#phrases + 1] = "Apply " .. value .. " " .. Debuffs.get(effect.id).label .. " to " .. target .. "."
             if effect.bonusDamage then
                 local bonus = context and Expressions.debuffDamage(effect, context) or describeExpression(effect.bonusDamage)

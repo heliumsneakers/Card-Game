@@ -134,7 +134,7 @@ export function previewEffects(card: Pick<CardDefinition, "id" | "effects"> & Pa
         const bonusDamage = effect.op === "debuff" && effect.bonusDamage ? amount(effect.bonusDamage, effect.damageScalable) : 0;
         if (effect.op === "debuff" && effect.bonusDamage) bonusDamageValues.set(effect, bonusDamage);
         if (effect.op === "damage" || effect.op === "debuff" || effect.op === "freeze") {
-          const chosenCount = effect.op === "damage" && effect.target === "selectedEnemies" ? effect.targetCount ?? 0 : 0;
+          const chosenCount = "targetCount" in effect && effect.target === "selectedEnemies" ? effect.targetCount ?? 0 : 0;
           const chosenTargets = chosenCount > 0 && state.enemies.length > 0
             ? Array.from({ length: chosenCount }, (_, offset) => (state.targetIndex + offset) % state.enemies.length)
             : [];

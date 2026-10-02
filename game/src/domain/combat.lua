@@ -164,7 +164,7 @@ end
 -- Find the chosen-enemy count, including conditional damage branches.
 local function chosenEnemyCount(effects)
     for _, effect in ipairs(effects or {}) do
-        if effect.op == "damage" and effect.target == "selectedEnemies" then return effect.targetCount end
+        if (effect.op == "damage" or effect.op == "debuff") and effect.target == "selectedEnemies" then return effect.targetCount end
         if effect.op == "if" then
             local count = chosenEnemyCount(effect["then"])
             if count then return count end

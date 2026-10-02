@@ -124,7 +124,7 @@ function expressionText(expression: Expression): string {
 
 /** Generate fallback prose for visible card effects. */
 function effectText(effect: Effect): string {
-  const targetText = (target: "selectedEnemy" | "selectedEnemies" | "otherEnemies" | "allEnemies") => target === "allEnemies" ? " to all enemies" : target === "otherEnemies" ? " to all other enemies" : target === "selectedEnemies" ? ` to ${effect.op === "damage" ? effect.targetCount : 0} chosen enemies` : " to the target";
+  const targetText = (target: "selectedEnemy" | "selectedEnemies" | "otherEnemies" | "allEnemies") => target === "allEnemies" ? " to all enemies" : target === "otherEnemies" ? " to all other enemies" : target === "selectedEnemies" ? ` to ${"targetCount" in effect ? effect.targetCount : 0} chosen enemies` : " to the target";
   if (effect.op === "damage") return `Deal ${expressionText(effect.amount)} damage${targetText(effect.target)}.`;
   if (effect.op === "damageBonus") {
     const groups = [effect.element && `${effect.element === "this" ? "this card’s" : effect.element} element`, effect.category && `${effect.category === "this" ? "this card’s" : effect.category} category`].filter(Boolean).join(" and ");

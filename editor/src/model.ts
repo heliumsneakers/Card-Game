@@ -28,7 +28,7 @@ export type Expression =
 export type Effect =
   | { op: "damage"; target: EffectTarget; targetCount?: number; amount: Expression; scalable?: boolean }
   | { op: "damageBonus"; element?: CardElement | "this"; category?: CardType | "this"; amount: Expression; scalable?: boolean; scope: "turn" | "combat" }
-  | { op: "debuff"; id: DebuffId; target: EffectTarget; stacks: Expression; scalable?: boolean; bonusDamage?: Expression; damageScalable?: boolean }
+  | { op: "debuff"; id: DebuffId; target: EffectTarget; targetCount?: number; stacks: Expression; scalable?: boolean; bonusDamage?: Expression; damageScalable?: boolean }
   /** Legacy schema-v1 Freeze effects are migrated to a debuff block on load. */
   | { op: "freeze"; target: EffectTarget }
   | { op: "armor" | "heal" | "draw"; amount: Expression; scalable?: boolean }
