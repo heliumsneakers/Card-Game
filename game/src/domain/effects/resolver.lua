@@ -29,7 +29,9 @@ function Resolver.resolve(definition, cardId, query, actions, multiplier, instan
 		multiplier = multiplier,
 		locals = {},
 		observe = observe,
-		element = element,
+		-- Definition metadata is available in gameplay and description previews.
+		element = definition.element or element,
+		category = definition.type,
 	})
 end
 

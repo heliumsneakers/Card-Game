@@ -25,14 +25,42 @@ function Validation.effects(effects, path, errors, depth, cardTarget, cardIds, l
     if depth > 3 then add(path, "conditional nesting exceeds 3"); return locals end
     if #effects > 64 then add(path, "cannot contain more than 64 effects"); return locals end
 
-    -- Check reserved keys and explicit references without rejecting shared names.
+    -- Validate both reference formats without reinterpreting legacy dotted names.
     local function counter(value, at)
-        local id = value.id
-        if type(id) ~= "string" or not id:match("%S") or id:sub(1, 1) == "@"
-            or (id:sub(1, 1) == "$" and id ~= "$thisCard" and id ~= "$thisInstance") then
-            add(at .. ".id", "invalid counter owner or shared name")
-        elseif id:match("^card%.") and cardIds and not cardIds[id] then add(at .. ".id", "referenced card does not exist") end
-        if value.scope ~= nil and value.scope ~= "turn" and value.scope ~= "combat" then add(at .. ".scope", "choose turn or combat lifetime") end
+        if value.scope ~= nil and value.scope ~= "turn" and value.scope ~= "combat" then
+            add(at .. ".scope", "choose turn or combat lifetime")
+        end
+        if value.owner == nil then
+            local id = value.id
+            if type(id) ~= "string" or not id:match("%S") or id:sub(1, 1) == "@"
+                or (id:sub(1, 1) == "$" and id ~= "$thisCard" and id ~= "$thisInstance") then
+                add(at .. ".id", "invalid counter owner or shared name")
+            elseif id:match("^card%.") and cardIds and not cardIds[id] then
+                add(at .. ".id", "referenced card does not exist")
+            end
+            if value.name ~= nil then add(at, "named counters require an explicit owner") end
+            return
+        end
+        -- Mixed identities are rejected so editor and game never choose different keys.
+        if value.id ~= nil then add(at, "use an owner or a legacy ID, not both") end
+        if type(value.name) ~= "string" or not value.name:match("%S") then add(at, "counter name must not be empty") end
+        local owner = value.owner
+        if type(owner) ~= "table" then add(at, "invalid counter owner"); return end
+        if owner.kind == "this" or owner.kind == "instance" then return
+        elseif owner.kind == "card" then
+            if type(owner.cardId) ~= "string" or (cardIds and not cardIds[owner.cardId]) then add(at, "referenced card does not exist") end
+        elseif owner.kind == "element" then
+            local allowed = { this = true, fire = true, ice = true, nature = true, earth = true, arcane = true }
+            if not allowed[owner.element] then add(at, "invalid element") end
+        elseif owner.kind == "category" then
+            local allowed = { this = true, DMG = true, DEF = true, HEAL = true, UTIL = true }
+            if not allowed[owner.category] then add(at, "invalid category") end
+        elseif owner.kind == "shared" then
+            -- Shared names must not impersonate card IDs or internal storage keys.
+            if type(value.name) == "string" and (value.name:match("^[@$]") or value.name:match("^card%.")) then
+                add(at, "shared name uses a reserved prefix")
+            end
+        else add(at, "invalid counter owner") end
     end
 
     -- Infer each node's result and reject mixed arithmetic or unsafe lookups.

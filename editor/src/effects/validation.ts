@@ -1,3 +1,4 @@
+import { counterIssues } from "./counterReferences.ts";
 import { debuffRegistry } from "./debuffs.ts";
 import type { CardDefinition } from "../model";
 import { effectDefaults } from "./defaults.ts";
@@ -15,9 +16,8 @@ export function validateEffects(effects: unknown, path: string, card: Pick<CardD
 
   /** Require a safe counter key and an implemented lifetime. */
   function counter(value: Record<string, unknown>, at: string) {
-    if (typeof value.id !== "string" || !value.id.trim() || value.id.startsWith("@") || (value.id.startsWith("$") && value.id !== "$thisCard" && value.id !== "$thisInstance")) add(`${at}.id`, "Choose a counter owner or a non-empty shared name.");
-    if (typeof value.id === "string" && value.id.startsWith("card.") && !cardIds.has(value.id)) add(`${at}.id`, "Referenced card does not exist.");
-    if (value.scope !== undefined && value.scope !== "turn" && value.scope !== "combat") add(`${at}.scope`, "Choose turn or combat lifetime.");
+    // One validator covers both legacy IDs and explicit ownership.
+    counterIssues(value, cardIds).forEach((message) => add(at, message));
   }
 
   /** Infer expression types and reject missing locals or mixed operands. */

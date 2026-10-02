@@ -50,7 +50,15 @@ button { color: inherit; }
 @media (max-width: 1450px) { .socket-grid { grid-template-columns: repeat(2, 1fr); }.generator-toolbar { grid-template-columns: repeat(2, 1fr); } }
 
 /* Keep reusable counter controls and traces legible inside nested blocks. */
-.counter-fields { display: grid; gap: 10px; min-width: 0; }
+/* Let counter groups use the full block width and wrap inside narrow formulas. */
+.counter-fields {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+.counter-fields > small { grid-column: 1 / -1; color: var(--muted); line-height: 1.5; }
 .counter-fields label, .counter-fields select, .counter-fields input { min-width: 0; max-width: 100%; }
 .recipes, .execution-preview details { margin-top: 14px; padding: 12px; border: 1px solid var(--border, #334155); border-radius: 8px; }
 .recipes summary, .execution-preview summary { cursor: pointer; }

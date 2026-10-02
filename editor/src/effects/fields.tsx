@@ -1,3 +1,4 @@
+import { replaceCounterReference } from "./counterReferences";
 import { debuffRegistry } from "./debuffs";
 import { EffectEditor } from "../EffectEditor";
 import { ExpressionEditor } from "../ExpressionEditor";
@@ -73,7 +74,7 @@ export function FreezeFields({ effect, onChange }: FieldProps) {
 export function CounterFields({ effect, onChange }: FieldProps) {
   if (effect.op !== "incrementCounter" && effect.op !== "subtractCounter" && effect.op !== "setCounter" && effect.op !== "resetCounter") return null;
   // Numeric legacy amounts become expressions only when the author edits them.
-  return <><CounterField value={effect} onChange={(reference) => onChange({ ...effect, ...reference })} />
+  return <><CounterField value={effect} onChange={(reference) => onChange(replaceCounterReference(effect, reference))} />
     {effect.op !== "resetCounter" && <ExpressionEditor value={typeof effect.amount === "number" ? literal(effect.amount) : effect.amount} onChange={(amount) => onChange({ ...effect, amount })} label={effect.op === "setCounter" ? "Value" : "Amount"} />}
     <small>Counters stay at or above zero. Earlier blocks affect later formulas.</small>
   </>;

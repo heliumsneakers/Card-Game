@@ -1,5 +1,7 @@
+import { replaceCounterReference } from "./effects/counterReferences";
 import { useContext } from "react";
-import { AuthoringCards, CounterField } from "./effects/CounterField";
+import { CounterField } from "./effects/CounterField";
+import { AuthoringCards } from "./AuthoringContext";
 import type { Expression } from "./model";
 
 interface Props { value: Expression; onChange: (value: Expression) => void; label?: string; condition?: boolean }
@@ -37,7 +39,7 @@ export function ExpressionEditor({ value, onChange, label = "Value", condition =
       </select>
     </label>
     {value.kind === "literal" && <input aria-label={`${label} number`} type="number" min="0" value={value.value} onChange={(event) => onChange({ ...value, value: Math.max(0, Number(event.target.value)) })} />}
-    {value.kind === "counter" && <CounterField value={value} onChange={(reference) => onChange({ ...value, ...reference })} />}
+    {value.kind === "counter" && <CounterField value={value} onChange={(reference) => onChange(replaceCounterReference(value, reference))} />}
     {value.kind === "card" && <select aria-label={`${label} card`} value={value.id} onChange={(event) => onChange({ ...value, id: event.target.value })}>{!cards.some((card) => card.id === value.id) && <option value={value.id}>Missing: {value.id}</option>}{cards.map((card) => <option key={card.id} value={card.id}>{card.name}</option>)}</select>}
     {value.kind === "local" && <input aria-label={`${label} calculated name`} value={value.name} onChange={(event) => onChange({ ...value, name: event.target.value })} />}
     {value.kind === "context" && <select aria-label={`${label} game value`} value={value.path} onChange={(event) => onChange({ ...value, path: event.target.value as Extract<Expression, { kind: "context" }>["path"] })}>

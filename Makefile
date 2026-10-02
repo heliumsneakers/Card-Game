@@ -33,6 +33,7 @@ test: tools
 	luajit tests/test_structure.lua
 	luajit tests/test_effects.lua
 	luajit tests/test_effect_contract.lua
+	luajit tests/test_counter_owners.lua
 	luajit tests/test_debuffs.lua
 	luajit tests/test_debuff_damage.lua
 	luajit tests/test_progression.lua
@@ -42,6 +43,7 @@ test: tools
 test-contract:
 	node tools/generate-debuffs.mjs --check
 	luajit tests/test_effect_contract.lua
+	luajit tests/test_counter_owners.lua
 	luajit tests/test_debuffs.lua
 	luajit tests/test_debuff_damage.lua
 	luajit tests/test_contract.lua

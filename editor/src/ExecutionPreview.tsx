@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { CardDefinition } from "./model";
+import type { CardDefinition, CounterReference } from "./model";
 import { CounterField } from "./effects/CounterField";
 import { counterKey, initialPreviewState, nextPreviewTurn, previewEffects, type PreviewState } from "./effects/preview";
 import { effectRegistry } from "./effects/registry";
@@ -9,11 +9,11 @@ import { validateEffects } from "./effects/validation";
 export function ExecutionPreview({ card, cards }: { card: CardDefinition; cards: CardDefinition[] }) {
   const [state, setState] = useState(initialPreviewState);
   const [instance, setInstance] = useState(1);
-  const [counter, setCounter] = useState<{ id: string; scope?: "turn" | "combat" }>({ id: "$thisCard", scope: "turn" });
+  const [counter, setCounter] = useState<CounterReference>({ id: "$thisCard", scope: "turn" });
   const issues: string[] = [];
   validateEffects(card.effects, "effects", card, new Set(cards.map((item) => item.id)), (_path, message) => issues.push(message));
   const result = issues.length ? undefined : previewEffects(card, state, `${card.id}:${instance}`);
-  const key = counterKey(counter, card.id, `${card.id}:${instance}`);
+  const key = counterKey(counter, card, `${card.id}:${instance}`);
 
   /** Update a numeric scenario field without altering the authored card. */
   function field(name: keyof PreviewState, label: string, max = 999) {

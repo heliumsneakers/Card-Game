@@ -1,3 +1,4 @@
+import { counterLabel, type CounterCard } from "./effects/counterReferences.ts";
 import { debuffForToken, debuffForDamageToken, getDebuff, legacyFreezeId } from "./effects/debuffs.ts";
 import { initialPreviewState, previewEffects } from "./effects/preview.ts";
 import { validateEffects } from "./effects/validation.ts";
@@ -110,7 +111,7 @@ function defaultGeneration(enemy: Pick<EnemyDefinition, "id">): EnemyDefinition[
 /** Describe an expression when no authored numeric token is available. */
 function expressionText(expression: Expression): string {
   if (expression.kind === "literal") return String(expression.value);
-  if (expression.kind === "counter") return `${expression.id} counter (${expression.scope || "turn"})`;
+  if (expression.kind === "counter") return `${counterLabel(expression)} counter (${expression.scope || "turn"})`;
   if (expression.kind === "card") return expression.id;
   if (expression.kind === "local") return expression.name;
   if (expression.kind === "context") {
@@ -188,11 +189,11 @@ function staticEffectValue(expression: Expression, effects: Effect[], seen = new
 const tokenEffectOps: Record<string, Effect["op"]> = { dmg: "damage", armor: "armor", heal: "heal", draw: "draw", mana: "mana", stacks: "addStatus" };
 
 /** Render base card text using ordered effect evaluation. */
-export function renderDescription(template: string, effects: Effect[] = [], cardId = "card.preview"): string {
+export function renderDescription(template: string, effects: Effect[] = [], cardId = "card.preview", metadata: Partial<CounterCard> = {}): string {
   // Base descriptions use zero counters and no spell power, but preserve effect order.
   const scenario = initialPreviewState();
   scenario.mana = 0; scenario.hp = 0; scenario.turn = 0; scenario.enemies = [];
-  const preview = previewEffects({ id: cardId, effects }, scenario);
+  const preview = previewEffects({ ...metadata, id: cardId, effects }, scenario);
   const allEffects = flattenedEffects(effects);
   const occurrences: Record<string, number> = {};
   return template.replace(descriptionToken, (_token, name: string, formula: string) => {
@@ -215,7 +216,7 @@ export function renderDescription(template: string, effects: Effect[] = [], card
 /** Prefer authored text and resolve its values against the card definition. */
 export function describeCard(card: CardDefinition): string {
   const template = card.description || card.effects.map(effectText).filter(Boolean).join(" ");
-  return renderDescription(template, card.effects, card.id);
+  return renderDescription(template, card.effects, card.id, card);
 }
 
 /** Create editable value tokens for cards without authored descriptions. */

@@ -1,5 +1,5 @@
 import { ExecutionPreview } from "./ExecutionPreview";
-import { AuthoringCards } from "./effects/CounterField";
+import { AuthoringCards } from "./AuthoringContext";
 import { replaceCard } from "./effects/references";
 import { useEffect, useMemo, useRef, useState } from "react";
 import initial from "../../game/content/content.json";

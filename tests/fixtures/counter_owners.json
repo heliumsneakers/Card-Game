@@ -1,0 +1,372 @@
+{
+  "valid": [
+    {
+      "name": "legacy this card",
+      "reference": {
+        "id": "$thisCard"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "card.firebolt"
+    },
+    {
+      "name": "legacy instance",
+      "reference": {
+        "id": "$thisInstance"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@instance:7"
+    },
+    {
+      "name": "legacy explicit card",
+      "reference": {
+        "id": "card.fireball"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "card.fireball"
+    },
+    {
+      "name": "legacy shared dotted name",
+      "reference": {
+        "id": "shared.combo"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "shared.combo"
+    },
+    {
+      "name": "legacy plain name",
+      "reference": {
+        "id": "fire"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "fire"
+    },
+    {
+      "name": "this default",
+      "reference": {
+        "owner": {
+          "kind": "this"
+        },
+        "name": "default"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "card.firebolt"
+    },
+    {
+      "name": "this named",
+      "reference": {
+        "owner": {
+          "kind": "this"
+        },
+        "name": "power"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@named:13:card.firebolt:power"
+    },
+    {
+      "name": "instance default",
+      "reference": {
+        "owner": {
+          "kind": "instance"
+        },
+        "name": "default"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@instance:7"
+    },
+    {
+      "name": "instance named",
+      "reference": {
+        "owner": {
+          "kind": "instance"
+        },
+        "name": "power"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@named:11:@instance:7:power"
+    },
+    {
+      "name": "card default",
+      "reference": {
+        "owner": {
+          "kind": "card",
+          "cardId": "card.fireball"
+        },
+        "name": "default"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "card.fireball"
+    },
+    {
+      "name": "card named",
+      "reference": {
+        "owner": {
+          "kind": "card",
+          "cardId": "card.fireball"
+        },
+        "name": "power"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@named:13:card.fireball:power"
+    },
+    {
+      "name": "element default",
+      "reference": {
+        "owner": {
+          "kind": "element",
+          "element": "this"
+        },
+        "name": "default"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@element:fire"
+    },
+    {
+      "name": "element named",
+      "reference": {
+        "owner": {
+          "kind": "element",
+          "element": "this"
+        },
+        "name": "power"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@named:13:@element:fire:power"
+    },
+    {
+      "name": "category default",
+      "reference": {
+        "owner": {
+          "kind": "category",
+          "category": "this"
+        },
+        "name": "default"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@category:DMG"
+    },
+    {
+      "name": "category named",
+      "reference": {
+        "owner": {
+          "kind": "category",
+          "category": "this"
+        },
+        "name": "power"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@named:13:@category:DMG:power"
+    },
+    {
+      "name": "explicit ice group",
+      "reference": {
+        "owner": {
+          "kind": "element",
+          "element": "ice"
+        },
+        "name": "power"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@named:12:@element:ice:power"
+    },
+    {
+      "name": "explicit heal category",
+      "reference": {
+        "owner": {
+          "kind": "category",
+          "category": "HEAL"
+        },
+        "name": "power"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@named:14:@category:HEAL:power"
+    },
+    {
+      "name": "explicit shared compatible",
+      "reference": {
+        "owner": {
+          "kind": "shared"
+        },
+        "name": "shared.combo"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "shared.combo"
+    },
+    {
+      "name": "delimiters in name",
+      "reference": {
+        "owner": {
+          "kind": "element",
+          "element": "fire"
+        },
+        "name": "power:casts"
+      },
+      "card": {
+        "id": "card.firebolt",
+        "element": "fire",
+        "type": "DMG"
+      },
+      "instanceId": "7",
+      "expected": "@named:13:@element:fire:power:casts"
+    }
+  ],
+  "invalid": [
+    {
+      "owner": {
+        "kind": "unknown"
+      },
+      "name": "power"
+    },
+    {
+      "owner": {
+        "kind": "element",
+        "element": "lava"
+      },
+      "name": "power"
+    },
+    {
+      "owner": {
+        "kind": "category",
+        "category": "fire"
+      },
+      "name": "power"
+    },
+    {
+      "owner": {
+        "kind": "card",
+        "cardId": "card.missing"
+      },
+      "name": "power"
+    },
+    {
+      "owner": {
+        "kind": "shared"
+      },
+      "name": "@element:fire"
+    },
+    {
+      "owner": {
+        "kind": "shared"
+      },
+      "name": "card.firebolt"
+    },
+    {
+      "owner": {
+        "kind": "this"
+      },
+      "name": ""
+    },
+    {
+      "owner": {
+        "kind": "this"
+      },
+      "name": "power",
+      "id": "$thisCard"
+    },
+    {
+      "id": "shared.x",
+      "name": "power"
+    },
+    {
+      "owner": "element",
+      "name": "power"
+    },
+    {
+      "owner": {
+        "kind": "element",
+        "element": "fire"
+      },
+      "name": "power",
+      "scope": "room"
+    }
+  ]
+}

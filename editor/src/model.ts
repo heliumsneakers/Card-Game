@@ -6,8 +6,15 @@ export type CardElement = "fire" | "ice" | "nature" | "earth" | "arcane";
 export type CardTarget = "enemy" | "multi" | "all" | "self";
 export type EffectTarget = "selectedEnemy" | "otherEnemies" | "allEnemies";
 
-/** Counter ownership is encoded by id; omitted scope preserves legacy turn counters. */
-export interface CounterReference { id: string; scope?: "turn" | "combat" }
+/** Ownership is independent from the counter name and reset timing. */
+export type CounterOwner =
+  | { kind: "this" | "instance" | "shared" }
+  | { kind: "card"; cardId: string }
+  | { kind: "element"; element: CardElement | "this" }
+  | { kind: "category"; category: CardType | "this" };
+export interface ExplicitCounterReference { owner: CounterOwner; name: string; scope?: "turn" | "combat"; id?: never }
+/** Old IDs remain readable; editing ownership upgrades only that reference. */
+export type CounterReference = ExplicitCounterReference | { id: string; scope?: "turn" | "combat"; owner?: never; name?: never };
 
 export type Expression =
   | { kind: "literal"; value: number }

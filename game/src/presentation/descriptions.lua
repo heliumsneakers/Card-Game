@@ -1,3 +1,4 @@
+local Counters = require("src.domain.effects.counters")
 local Debuffs = require("src.domain.debuffs.registry")
 local Expressions = require("src.domain.effects.expressions")
 local amount = Expressions.amount
@@ -13,7 +14,7 @@ local function describeExpression(expression, context)
     end
     if expression.kind == "card" then return expression.id end
     if expression.kind == "literal" then return tostring(expression.value) end
-    if expression.kind == "counter" then return "that card's count" end
+    if expression.kind == "counter" then return Counters.label(expression) .. " counter" end
     if expression.kind == "local" then return expression.name end
     if expression.kind == "context" then return expression.path end
     local symbols = { add = "+", subtract = "−", multiply = "×", min = "min", max = "max" }
@@ -23,7 +24,7 @@ end
 -- Build fallback prose from supported effect blocks when no authored text exists.
 local function describeGenerated(definition, query, cardId, multiplier, instanceId)
     local phrases = {}
-    local context = query and { query = query, cardId = cardId, instanceId = instanceId, multiplier = multiplier, locals = {} } or nil
+    local context = query and { query = query, cardId = cardId, instanceId = instanceId, element = definition.element, category = definition.type, multiplier = multiplier, locals = {} } or nil
     for _, effect in ipairs(definition.effects) do
         if effect.op == "setLocal" and context then
             context.locals[effect.name] = Expressions.evaluate(effect.value, context)
@@ -133,7 +134,7 @@ end
 
 -- Replace authored value tokens with live amounts or their baseline formulas.
 local function renderDescription(definition, query, cardId, multiplier, instanceId)
-    local context = query and { query = query, cardId = cardId, instanceId = instanceId, multiplier = multiplier, locals = {} } or nil
+    local context = query and { query = query, cardId = cardId, instanceId = instanceId, element = definition.element, category = definition.type, multiplier = multiplier, locals = {} } or nil
     if context then primeDescriptionLocals(definition.effects, context) end
 
     -- The combat adapter can simulate ordered effects without touching real state.

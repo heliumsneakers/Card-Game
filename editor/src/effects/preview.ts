@@ -1,3 +1,4 @@
+import { resolveCounterId, type CounterCard } from "./counterReferences.ts";
 import { getDebuff, legacyFreezeId } from "./debuffs.ts";
 import type { CardDefinition, CounterReference, Effect, Expression } from "../model";
 
@@ -16,10 +17,10 @@ export function initialPreviewState(): PreviewState {
 }
 
 /** Resolve ownership and lifetime into an unambiguous sandbox key. */
-export function counterKey(reference: CounterReference, cardId: string, instanceId: string): string {
-  // Prefixes also prevent shared names from becoming object prototype properties.
-  const id = reference.id === "$thisCard" ? cardId : reference.id === "$thisInstance" ? `@instance:${instanceId}` : reference.id;
-  return `${reference.scope || "turn"}:${id}`;
+export function counterKey(reference: CounterReference, card: string | CounterCard, instanceId: string): string {
+  // String callers retain the old API; dynamic group owners require card metadata.
+  const definition = typeof card === "string" ? { id: card } : card;
+  return `${reference.scope || "turn"}:${resolveCounterId(reference, definition, instanceId)}`;
 }
 
 /** Clear turn state while retaining counters whose lifetime is the combat. */
@@ -31,7 +32,7 @@ export function nextPreviewTurn(state: PreviewState): PreviewState {
 }
 
 /** Resolve an effect list against a detached state and return an ordered trace. */
-export function previewEffects(card: Pick<CardDefinition, "id" | "effects">, source: PreviewState, instanceId = "1"): PreviewResult {
+export function previewEffects(card: Pick<CardDefinition, "id" | "effects"> & Partial<Pick<CardDefinition, "element" | "type">>, source: PreviewState, instanceId = "1"): PreviewResult {
   const state: PreviewState = structuredClone(source);
   // Older hot-reloaded sandbox state may predate the potency map.
   state.debuffDamage ||= [];
@@ -54,7 +55,7 @@ export function previewEffects(card: Pick<CardDefinition, "id" | "effects">, sou
     if (expression.kind === "literal") return expression.value;
     if (expression.kind === "card") return expression.id;
     if (expression.kind === "counter") {
-      const key = counterKey(expression, card.id, instanceId);
+      const key = counterKey(expression, card, instanceId);
       return read(key, state.counters[key] || 0);
     }
     if (expression.kind === "local") {
@@ -111,7 +112,7 @@ export function previewEffects(card: Pick<CardDefinition, "id" | "effects">, sou
         locals.set(effect.name, value);
         result = `${effect.name} = ${value}`;
       } else if (effect.op === "incrementCounter" || effect.op === "subtractCounter" || effect.op === "setCounter" || effect.op === "resetCounter") {
-        const key = counterKey(effect, card.id, instanceId);
+        const key = counterKey(effect, card, instanceId);
         const before = state.counters[key] || 0;
         const value = effect.op === "resetCounter" ? 0 : amount(effect.amount ?? 1);
         state.counters[key] = effect.op === "incrementCounter" ? before + value : effect.op === "subtractCounter" ? Math.max(0, before - value) : value;

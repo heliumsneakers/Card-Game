@@ -1,10 +1,20 @@
-import type { CardDefinition, ContentDocument, Effect, Expression } from "../model";
+import type { CardDefinition, ContentDocument, Effect, Expression, CounterReference } from "../model";
+
+/** Rename explicit card owners while leaving element/category groups untouched. */
+function renameCounter<T extends CounterReference>(value: T, previousId: string, nextId: string): T {
+  if (value.owner?.kind === "card" && value.owner.cardId === previousId) {
+    return { ...value, owner: { ...value.owner, cardId: nextId } };
+  }
+  if (!value.owner && value.id === previousId) return { ...value, id: nextId };
+  return value;
+}
 
 /** Rewrite explicit card references without changing named shared counters. */
 function renameExpression(value: Expression, previousId: string, nextId: string): Expression {
   // Formula trees may nest references below either operand.
   if (value.kind === "binary" || value.kind === "compare") return { ...value, left: renameExpression(value.left, previousId, nextId), right: renameExpression(value.right, previousId, nextId) };
-  if ((value.kind === "counter" || value.kind === "card") && value.id === previousId) return { ...value, id: nextId };
+  if (value.kind === "counter") return renameCounter(value, previousId, nextId);
+  if (value.kind === "card" && value.id === previousId) return { ...value, id: nextId };
   return value;
 }
 
@@ -14,6 +24,7 @@ function renameEffects(effects: Effect[], previousId: string, nextId: string): E
   return effects.map((effect) => {
     if (effect.op === "if") return { ...effect, condition: renameExpression(effect.condition, previousId, nextId), then: renameEffects(effect.then, previousId, nextId), else: effect.else && renameEffects(effect.else, previousId, nextId) };
     let next = { ...effect };
+    if (next.op === "incrementCounter" || next.op === "subtractCounter" || next.op === "setCounter" || next.op === "resetCounter") next = renameCounter(next, previousId, nextId);
     if ("id" in next && next.id === previousId) next = { ...next, id: nextId } as Effect as typeof next;
     if ("amount" in next && typeof next.amount !== "number") next = { ...next, amount: renameExpression(next.amount, previousId, nextId) };
     if (next.op === "debuff" && next.bonusDamage) next = { ...next, bonusDamage: renameExpression(next.bonusDamage, previousId, nextId) };
